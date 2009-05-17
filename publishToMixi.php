@@ -27,26 +27,37 @@
  *
  */
 
-// Mixi login credential
-// Set your mixi login username (email addess) and password here.
-$P2Mixi_username = "your_email@gmail.com";
-$P2Mixi_password = "your_password";
-// Your Mixi ID - numbers only.
-$P2Mixi_id = "your_mixi_id";
-
-// Publish to Mixi checkbox default value.
-// If this is true, Publish to Mixi checkbox is checked by default. 
-$P2Mixi_default = false;
-
-// Header default string.
-// '%%URL%%' will be replaced with the post permalink. 
-$P2Mixi_headerDefault = '';
-// Footer default string.
-// '%%URL%%' will be replaced with the post permalink. 
-$P2Mixi_footerDefault = '';
-
 // Debug mode - for debug purpose only
 $P2Mixi_debug = false;
+
+// ----------------------------------------------------------------------------
+/**
+ * Register settings (2.7 compatibility)
+ */
+function P2Mixi_adminInit () {
+	if ( function_exists( 'add_option_update_handler' ) ) {
+		add_option_update_handler( 'P2Mixi', 'P2Mixi_username' );
+		add_option_update_handler( 'P2Mixi', 'P2Mixi_password' );
+		add_option_update_handler( 'P2Mixi', 'P2Mixi_id' );
+		add_option_update_handler( 'P2Mixi', 'P2Mixi_headerDefault' );
+		add_option_update_handler( 'P2Mixi', 'P2Mixi_footerDefault' );
+		add_option_update_handler( 'P2Mixi', 'P2Mixi_default' );
+	}
+}
+
+/**
+ * Register settings (the old way)
+ */
+function P2Mixi_activate () {
+	if ( function_exists( 'add_option' ) ) {
+		add_option( 'P2Mixi_username' );
+		add_option( 'P2Mixi_password' );
+		add_option( 'P2Mixi_id' );
+		add_option( 'P2Mixi_headerDefault' );
+		add_option( 'P2Mixi_footerDefault' );
+		add_option( 'P2Mixi_default', true );
+	}
+}
 
 // ----------------------------------------------------------------------------
 /**
@@ -56,12 +67,67 @@ function P2Mixi_renderOption () {
 	// expects 'add_meta_box' function... wordpress 2.5 and and above.
 	add_meta_box( 'myplugin_sectionid', __( 'Publish To Mixi', 'P2Mixi_textdomain' ), 
 		'P2Mixi_renderOptionContent', 'post', 'advanced' );
+	add_options_page( __( 'mixi autopost settings', 'P2Mixi_textdomain'), __( 'Mixi Autoposting', 'P2Mixi_textdomain' ), 8, __FILE__, 'P2Mixi_renderAdminOptionContent');
 }
+
+function P2Mixi_renderAdminOptionContent () {
+	?>
+	<div class="wrap">
+	<h2><?php echo __('mixi autopost settings', 'P2Mixi_textdomain') ?></h2>
+	<form method="post" action="options.php">
+	<?php settings_fields('P2Mixi'); ?>
+        <h3><?php echo __('Login info', 'P2Mixi_textdomain') ?></h3>
+	<p></p>
+	<table class="form-table">
+	<tr valign="top">
+	   <th scope="row"><?php echo __('Username:', 'P2Mixi_textdomain') ?></th>
+		<td><input type="text" name="P2Mixi_username" value="<?php echo get_option('P2Mixi_username'); ?>" /><td>
+        </tr>
+	<tr valign="top">
+	   <th scope="row"><?php echo __('Password:', 'P2Mixi_textdomain') ?></th>
+		<td><input type="password" name="P2Mixi_password" value="<?php echo get_option('P2Mixi_password'); ?>" /><td>
+        </tr>
+	<tr valign="top">
+	   <th scope="row"><?php echo __('ID:', 'P2Mixi_textdomain') ?></th>
+		<td><input type="text" name="P2Mixi_id" value="<?php echo get_option('P2Mixi_id'); ?>" /><td>
+        </tr>
+	</table>
+        <h3><?php echo __('Posting defaults', 'P2Mixi_textdomain') ?></h3>
+	<p></p>
+	<table class="form-table">
+	<tr valign="top">
+	   <th scope="row"><?php echo __('Header:', 'P2Mixi_textdomain') ?></th>
+		<td><textarea name="P2Mixi_headerDefault" cols="60" rows="4"><?php echo get_option('P2Mixi_headerDefault'); ?></textarea><br/>
+		<?php echo __('%%URL%% will be replaced with the post permalink.', '') ?><td>
+        </tr>
+	<tr valign="top">
+	   <th scope="row"><?php echo __('Footer:', 'P2Mixi_textdomain') ?></th>
+		<td><textarea name="P2Mixi_footerDefault" cols="60" rows="4"><?php echo get_option('P2Mixi_footerDefault'); ?></textarea><br/>
+		<?php echo __('%%URL%% will be replaced with the post permalink.', '') ?><td>
+        </tr>
+	<tr valign="top">
+	   <th scope="row"><?php echo __('Publish to mixi:', 'P2Mixi_textdomain') ?></th>
+		<td><label for="P2Mixi_default">
+		<input type="checkbox" name="P2Mixi_default" id="P2Mixi_default" <?php if ( get_option('P2Mixi_default') == true ) { echo 'checked="checked"'; } ?> />
+		<?php echo __( 'Publish to mixi by default', 'P2Mixi_textdomain' ) ?>
+		<td>
+        </tr>
+	</table>
+	<p class="submit">
+	<input type="submit" class="button-primary" value="<?php _e('Save Changes') ?>" />
+	</p>
+	</form>
+	</div>
+	<?php
+}
+
 /**
  * Renders the option box content. This will be called by P2Mixi_renderOption().
  */
 function P2Mixi_renderOptionContent () {
-	global $P2Mixi_default, $P2Mixi_headerDefault, $P2Mixi_footerDefault;
+	$P2Mixi_default = get_option( 'P2Mixi_default' );
+	$P2Mixi_headerDefault = get_option( 'P2Mixi_headerDefault' );
+	$P2Mixi_footerDefault = get_option( 'P2Mixi_footerDefault' );
 
 	?>
 	
@@ -94,9 +160,13 @@ function P2Mixi_renderOptionContent () {
  * @return postId
  */
 function P2Mixi_publishHandler ( $postId ) {
-	global $P2Mixi_username, $P2Mixi_password, $P2Mixi_id, 
-		$P2Mixi_default, $P2Mixi_headerDefault, $P2Mixi_footerDefault;
-
+	global $P2Mixi_debug;
+	$P2Mixi_username = get_option( 'P2Mixi_username' );
+	$P2Mixi_password = get_option( 'P2Mixi_password' );
+	$P2Mixi_id = get_option( 'P2Mixi_id' );
+	$P2Mixi_default = get_option( 'P2Mixi_default' );
+	$P2Mixi_headerDefault = get_option( 'P2Mixi_headerDefault' );
+	$P2Mixi_footerDefault = get_option( 'P2Mixi_footerDefault' );
 		
 	$header = "";
 	$footer = "";	
@@ -134,6 +204,7 @@ function P2Mixi_publishHandler ( $postId ) {
 	}
 	// Extracting images from the post content.
 	$extractor = new P2Mixi_JpegExtractor();
+	$extractor->setDebugMode( $P2Mixi_debug );
 	$images = $extractor->extract( $post->post_content );
 
 	// Header text
@@ -159,6 +230,8 @@ function P2Mixi_publishHandler ( $postId ) {
 	}
 	// content = header + body + footer	
 	$content = $header . $body . $footer;
+	// strip html thingy
+	$content = sanitize_content( $content );
 	// Publish to Mixi
 	P2Mixi_publishToMixi( $P2Mixi_username, $P2Mixi_password, $P2Mixi_id, $post->post_title, $content, $images );
 	return $postId;
@@ -196,7 +269,7 @@ function P2Mixi_publishToMixi () {
 	
 	// mixi POST URL
 	$url = 'http://mixi.jp/atom/diary/member_id=' . $id;
-	$client = new P2Mixi_TinyHttpClient( "mixi.jp", 80 );
+	$client = new P2Mixi_TinyHttpClient();
 	$client->setDebugMode($P2Mixi_debug);
 	
 	//------------------------------------------------------------
@@ -238,8 +311,63 @@ function P2Mixi_publishToMixi () {
 
 // Register actions to wordpress.
 if ( function_exists( 'add_action' ) ) {
+	add_action( 'admin_init', 'P2Mixi_adminInit' );
 	add_action( 'admin_menu', 'P2Mixi_renderOption' );
 	add_action( 'publish_post', 'P2Mixi_publishHandler' );
+}
+
+if ( function_exists( 'register_activation_hook' ) ) {
+	register_activation_hook( __FILE__, 'P2Mixi_activate' );
+}
+
+/**
+ * Sanitize body text
+ * - Strip html tags
+ * - Decode html entities
+ */
+function sanitize_content ( $text ) {
+	$ret = $text;
+	$ret = preg_replace(
+		array(
+		// Remove invisible content
+			'@<head[^>]*?>.*?</head>@siu',
+			'@<style[^>]*?>.*?</style>@siu',
+			'@<script[^>]*?.*?</script>@siu',
+			'@<object[^>]*?.*?</object>@siu',
+			'@<embed[^>]*?.*?</embed>@siu',
+			'@<applet[^>]*?.*?</applet>@siu',
+			'@<noframes[^>]*?.*?</noframes>@siu',
+			'@<noscript[^>]*?.*?</noscript>@siu',
+			'@<noembed[^>]*?.*?</noembed>@siu',
+		// Add line breaks before and after blocks
+			'@</?((address)|(blockquote)|(center)|(del))@iu',
+			'@</?((div)|(h[1-9])|(ins)|(isindex)|(p)|(pre))@iu',
+			'@</?((dir)|(dl)|(dt)|(dd)|(li)|(menu)|(ol)|(ul))@iu',
+			'@</?((table)|(th)|(td)|(caption))@iu',
+			'@</?((form)|(button)|(fieldset)|(legend)|(input))@iu',
+			'@</?((label)|(select)|(optgroup)|(option)|(textarea))@iu',
+			'@</?((frameset)|(frame)|(iframe))@iu',
+		// convert br to crlf
+			'@<br */?>@i',
+		),
+		array(
+			' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ',
+			"\n\$0", "\n\$0", "\n\$0", "\n\$0", "\n\$0", "\n\$0",
+			"\n\$0",
+			"\n",
+		),
+		$ret );
+	$ret = strip_tags( $ret );
+	$ret = preg_replace(
+		array(
+			"@&nbsp;@i",
+		),
+		array(
+			" ",
+		),
+		$ret );
+	$ret = html_entity_decode( $ret, ENT_QUOTES, "utf-8" );
+	return $ret;
 }
 
 /**
@@ -316,20 +444,11 @@ class P2Mixi_JpegExtractor {
 	 * @return unknown
 	 */
 	function _getData ( $url ) {
-		$host = "";
-		$port = 80;
-		// Parse the URL to get the host name and port number.
-		preg_match ( "/\/\/([^\/]+)\//", $url, $regs );
-		$arr = split( ':', $regs[1] );
-		$host = $arr[0];
-		if ( count( $arr ) == 2 )
-			$port = intval( $arr[1] );
-
-		if ( $this->debug ) error_log ( "P2Mixi_JpegExtractor._getData(): Host >>>$host<<< Port >>>$port<<<" );
 
 		// Get the image data.
-		$client = new P2Mixi_TinyHttpClient( $host, $port );
-		$client->setDebugMode($this->debug);
+		$client = new P2Mixi_TinyHttpClient();
+		$client->setDebugMode( $this->debug );
+		$client->requestHeaders["Connection"] = "Keep-Alive";
 		$contents = $client->get( $url );
 		return $contents;
 	}
@@ -354,12 +473,169 @@ class P2Mixi_JpegExtractor {
 }
 
 /**
+ * Http socket class who knows how to send and receive http headers and body.
+
+ * Copyright (c) 2001, 2002 by Martin Tsachev. All rights reserved.
+ * mailto:martin@f2o.org
+ * http://martin.f2o.org
+ * 
+ * Redistribution and use in source and binary forms,
+ * with or without modification, are permitted provided
+ * that the conditions available at
+ * http://www.opensource.org/licenses/bsd-license.html
+ * are met.
+*/
+class P2Mixi_TinyHttpSocket {
+	var $fp = null;
+	var $host;
+	var $port;
+	var $getlen = 1024;
+	var $debug = false;
+
+	var $request;
+	var $connection;
+
+	/**
+	 * constructor
+	 */
+	function P2Mixi_TinyHttpSocket ( $host, $port ) {
+		$this->host = $host;
+		$this->port = $port;
+	}
+
+	function setDebugMode ( $debug ) {
+		$this->debug = $debug;
+	}
+
+	function connect ( ) {
+		if ( $this->fp ) {
+			return true;
+		}
+		$this->fp = fsockopen( $this->host, $this->port, $errno, $errstr, 30 );
+		if ( !$this->fp ) {
+			return false;
+		}
+		return true;
+	}
+
+	function close ( ) {
+		fclose( $this->fp );
+	}
+
+	function _constructHeaderString ( $headers ) {
+		$str = "";
+		foreach ( $headers as $name=>$value ) {
+			$str .= "$name: $value\r\n";
+		}
+		return $str;
+	}
+
+	function send ( $method, $url, $headers, $body='' ) {
+		$out = "$method $url HTTP/1.1\r\n";
+		$out .= $this->_constructHeaderString( $headers );
+		$out .= "\r\n";
+		if ( $body != '' ) {
+			$out .= $body;
+		}
+		$this->request = $out;
+		if ( isset( $headers["Connection"] ) ) {
+			$this->connection = strtolower( $headers["Connection"] );
+		}
+		if ( $this->fp ) {
+			if ( $this->debug ) error_log( "P2Mixi_TinyHttpSocket.send():  $out " );
+			fwrite( $this->fp, $out );
+		}
+	}
+
+	function recv ( &$headers, &$body ) {
+		$headers = array();
+		$header = fgets( $this->fp, $this->getlen );
+		if ( !$header ) { // if disconnected since send
+			$this->connect();
+			fputs( $this->fp, $this->request );
+			$header = fgets( $this->fp, $this->getlen );
+		}
+
+		preg_match( '|^HTTP.+ (.+) |', $header, $matches );
+		$headers["Status-Line"] = trim( $header );
+		$headers["Status-Code"] = intval( $matches[1] );
+		if ( $this->debug ) error_log( "P2Mixi_TinyHttpSocket.recv(): Status line: ".$header );
+
+		if ( $header == "" ) return;
+
+		$mime = '';
+		$transfer = '';
+		$connection = $this->connection;
+		
+		while ( $line = fgets( $this->fp, $this->getlen ) ) {
+			if ( $line == "\r\n" ) { break; }
+			$param = explode( ":", $line, 2 );
+			$name = trim( $param[0] );
+			$value = trim( $param[1] );
+			$headers[$name] = $value;
+			if ( $this->debug ) error_log( "P2Mixi_TinyHttpSocket.recv(): $name = $value" );
+
+			switch( $name ) {
+				case 'Content-Length':
+					$length = intval( $value );
+					break;
+				case 'Content-Type':
+					$mime = strtolower( $value );
+					break;
+				case 'Connection':
+					$connection = strtolower( $value );
+					break;
+				case 'Transfer-Encoding':
+					$transfer = strtolower( $value );
+				break;
+			}
+		 }
+
+		$body = '';
+
+		if ( $connection == 'close' ) {
+			if ( $this->debug ) error_log( "P2Mixi_TinyHttpSocket.recv(): looping for closed connection" );
+			while ( !feof( $this->fp ) ) {
+				$body .= fread( $this->fp, $this->getlen );
+			}
+			return ;
+		}
+
+		if ( isset( $length ) and strpos( $transfer, 'chunked' ) === false) {
+			if ( $this->debug ) error_log( "P2Mixi_TinyHttpSocket.recv(): looping unchunked keep-alive connection for $length" );
+			while ( true ) {
+				if ( $length <= 0 ) { break; }
+				$read = fread( $this->fp, $length );
+				$length -= strlen( $read );
+				$body .= $read;
+			}
+			return ;
+		}
+
+		// chunked encoding
+		$length = fgets( $this->fp, $this->getlen );
+		$length = hexdec( $length );
+
+		if ( $this->debug ) error_log( "P2Mixi_TinyHttpSocket.recv(): looping chunked keep-alive connection for $length" );
+		while ( true ) {
+			if ( $length == 0 ) { break; }
+			$body .= fread( $this->fp, $length );
+			fgets( $this->fp, $this->getlen );
+			$length = fgets( $this->fp, $this->getlen );
+			$length = hexdec( $length );
+		}
+
+		fgets( $this->fp, $this->getlen );
+		return;
+	}
+}
+
+
+/**
  * Http client class
  */
 class P2Mixi_TinyHttpClient {
 	var $cookies = array();
-	var $host = "";
-	var $port = 80;
 	var $debug = false;
 
 	// Default request headers.
@@ -371,12 +647,8 @@ class P2Mixi_TinyHttpClient {
 	/**
 	 * constructor
 	 */
-	function P2Mixi_TinyHttpClient ( $host = "", $port = 80 ) {
-		$this->host = $host;
-		$this->port = $port;
-
+	function P2Mixi_TinyHttpClient ( ) {
 		# Init default http request headers.
-		$this->requestHeaders["Host"] = $this->host;
 		$this->requestHeaders["Accept"] = '*/*';
 		$this->requestHeaders["Connection"] = "Close";
 	}
@@ -398,35 +670,54 @@ class P2Mixi_TinyHttpClient {
 	/**
 	 * Run GET http request.
 	 */
-	function get ( $url = "" ) {
+	function get ( $url = "", $retries = 0 ) {
 		$res = null;
+		if ( $retries > 10 ) {
+			error_log( "P2Mixi_TinyHttpClient.get(): too many retries for $url" );
+			return $res;
+		}
 		if ( $url == "" ) {
 			error_log( 'P2Mixi_TinyHttpClient.get(): $url is empty.' );
 		} else {
-			$fp = fsockopen( $this->host, $this->port, $errno, $errstr, 30 );
-			if ( !$fp ) {
+			// Parse the URL to get the host name and port number.
+			$this->_parseUrl( $url, $host, $port, $trail);
+			if ( !$port ) $port = 80;
+			if ( $this->debug ) error_log ( "P2Mixi_TinyHttpClient.get(): Host >>>$host<<< Port >>>$port<<<" );
+
+			$sock = new P2Mixi_TinyHttpSocket( $host, $port );
+			$sock->setDebugMode( $this->debug );
+			if ( !$sock->connect() ) {
 				error_log( "P2Mixi_TinyHttpClient.get(): fsockopen failed: $errstr ( $errno )" );
 			} else {
 				$headers = $this->requestHeaders;
+				$headers["Host"] = $host;
 				if ( count( $this->cookies ) > 0 ) {
 					$headers['Cookie'] = $this->_constructCookieString();
 				}
 
-				$out = "GET $url HTTP/1.1\r\n";
-				$out .= $this->_constructHeaderString( $headers );
-				$out .= "\r\n";
-				fwrite( $fp, $out );
-				if ( $this->debug ) error_log( "P2Mixi_TinyHttpClient.get():  $out " );
+				$sock->send( "GET", $url, $headers );
+				$sock->recv( $resp_headers, $resp_body );
+				if ( $this->debug ) error_log( "P2Mixi_TinyHttpClient.get():  socket recv end " );
+				if ( $resp_headers["Status-Code"] == 403 && $this->debug ) error_log( "P2Mixi_TinyHttpClient.get():  Body: $resp_body " );
 
-				while ( !feof( $fp ) ) {
-					$res .=  fgets( $fp, 128 );
+				$this->_setResponseHeaders( $resp_headers );
+				$res = $resp_body;
+				$sock->close();
+
+				if ( isset( $this->responseHeaders["Status-Code"] ) ) {
+					$code = $this->responseHeaders["Status-Code"];
+					switch( $code ) {
+					case ( (300 <= $code && $code <= 303) || $code == 307 ):
+						if ( isset( $this->responseHeaders["Location"] ) ) {
+							$location = $this->responseHeaders["Location"];
+							if ( $this->debug ) error_log( "P2Mixi_TinyHttpClient.get(): Redirecting($retries retries so far): $location" );
+							return $this->get( $location, $retries + 1 );
+						}
+					break;
+					}
 				}
-				fclose( $fp );
 			}
-			$this->_parseResponseHeaders( $res );
 		}
-		// cut off the response headers
-		$res = substr( $res, strpos( $res, "\r\n\r\n" ) + 4 );
 		return $res;
 	}
 
@@ -440,60 +731,58 @@ class P2Mixi_TinyHttpClient {
 		} elseif ( $body == null ) {
 			error_log( 'P2Mixi_TinyHttpClient.post(): $body is empty.' );
 		} else {
-			$fp = fsockopen( $this->host, $this->port, $errno, $errstr, 30 );
-			if ( !$fp ) {
+			$this->_parseUrl( $url, $host, $port, $trail);
+			if ( !$port ) $port = 80;
+			$sock = new P2Mixi_TinyHttpSocket( $host, $port );
+			$sock->setDebugMode( $this->debug );
+			if ( !$sock->connect() ) {
 				error_log( "P2Mixi_TinyHttpClient.post(): fsockopen failed: $errstr ( $errno )" );
 			} else {
 				$headers = $this->requestHeaders;
 				$headers['Content-Length'] = strlen( $body );
+				$headers['Host'] = $host;
 
 				if ( count( $this->cookies ) > 0 ) {
 					$headers['Cookie'] = $this->_constructCookieString();
 				}
 				 
-				$out = "POST $url HTTP/1.1\r\n";
-				$out .= $this->_constructHeaderString( $headers );
-				$out .= "\r\n";
-				$out .= $body;
-				fwrite( $fp, $out );
-				if ( $this->debug ) error_log( "P2Mixi_TinyHttpClient.post():  $out " );
-
-				while ( !feof( $fp ) ) {
-					$res .=  fgets( $fp, 128 );
-				}
-				fclose( $fp );
+				$sock->send( "POST", $url, $headers, $body );
+				$sock->recv( $resp_headers, $resp_body );
+				if ( $this->debug ) error_log( "P2Mixi_TinyHttpClient.post():  socket recv end " );
+				$sock->close();
+				$this->_setResponseHeaders( $resp_headers );
+				$res = $resp_body;
 			}
 		}
-		$this->_parseResponseHeaders( $res );
-		// cut off the response headers
-		$res = substr( $res, strpos( $res, "\r\n\r\n" ) + 4 );
 		return $res;
 	}
-	
-	
+		
+	/**
+	 * Parse url and return host, port, trailing path
+	 */
+	function _parseUrl ( $url, &$host, &$port, &$trail ) {
+		$comps = parse_url( $url );
+		$path = $comps['path'];
+		if ( $path == "" ) $path = '/';
+		if ( isset( $comps['query'] ) ) {
+			$path .= '?' . $comps['query'];
+		}
+		if ( isset( $comps['fragment'] ) ) {
+			$path .= '#' . $comps['fragment'];
+		}
+		$host = $comps['host'];
+		$port = $comps['port'];
+		$trail = $path;
+		return $comps;
+	}
 	/**
 	 * Parse http response header
 	 */
-	function _parseResponseHeaders ( $res ) {
-		if ( $res == '' ) return;
-		// Init response header array
-		$this->responseHeaders = array();
-		
-		$res = substr( $res, 0, strpos( $res, "\r\n\r\n" ) );
-		if ( $this->debug ) error_log( "P2Mixi_TinyHttpClient._parseResponseHeaders(): Response header: ".$res );
-		
-		$lines = explode( "\r\n", $res );
-		if ( $this->debug ) error_log( "P2Mixi_TinyHttpClient._parseResponseHeaders(): count(lines) ".count( $lines ) );
-		$index = -1;
-		foreach ( $lines as $line ) {
-			$param = explode( ":", $line, 2 );
-			if ( $this->debug ) error_log( "P2Mixi_TinyHttpClient._parseResponseHeaders(): $param[0] = $param[1]" );
-			$this->responseHeaders[trim( $param[0] )] = trim( $param[1] );			
-			
-			if ( preg_match ( "/^Set-Cookie/i", $line ) ) {
-				if ( $this->debug ) error_log( "P2Mixi_TinyHttpClient._parseResponseHeaders(): cookie found :  $line " );
-				$this->_parseCookie($line);
-			}		
+	function _setResponseHeaders ( $headers ) {
+		$this->responseHeaders = $headers;
+		if( isset( $headers['Set-Cookie'] ) ) {
+			if ( $this->debug ) error_log( "P2Mixi_TinyHttpClient._parseResponseHeaders(): cookie found :  $line " );
+			$this->_parseCookie($headers['Set-Cookie']);
 		}
 	}
 	
@@ -502,12 +791,10 @@ class P2Mixi_TinyHttpClient {
 	 */
 	function _parseCookie ( $line ) {
 		// Sample set-cookie line is like following.
-		// Set-Cookie: name=value; path=/; expires=Wednesday, 09-Nov-99 23:12:40 GMT
+		// name=value; path=/; expires=Wednesday, 09-Nov-99 23:12:40 GMT
 		
-		// Get the "Set-Cookie: name=value" part
+		// Get the "name=value" part
 		$cookie = explode( ";", $line );
-		// Take off "Set-Cookie:" 
-		$cookie = explode ( ":", $cookie[0] );
 		// Split name and value.
 		$cookie = explode ( "=", $cookie[1] );
 		if ( count( $cookie ) == 2 )
@@ -521,14 +808,6 @@ class P2Mixi_TinyHttpClient {
 		$str = "";
 		foreach ( $this->cookies as $name=>$value ) {
 			$str .= "$name=$value;";
-		}
-		return $str;
-	}
-
-	function _constructHeaderString ( $headers ) {
-		$str = "";
-		foreach ( $headers as $name=>$value ) {
-			$str .= "$name: $value\r\n";
 		}
 		return $str;
 	}
