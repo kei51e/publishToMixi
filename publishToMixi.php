@@ -1,10 +1,10 @@
 <?php
 /*
  Plugin Name: Publish to Mixi
- Plugin URI: http://wordpress.org/#
+ Plugin URI: http://ksnn.com/diary/?p=1713
  Description: Publish the post to Mixi.
  Author: Kei Saito
- Version: 1.0
+ Version: 1.1
  Author URI: http://ksnn.com/
  */
 
@@ -32,7 +32,7 @@
 $mixi_username = "youremail@gmail.com";
 $mixi_password = "yourpassword";
 
-// DO NOT EDIT BELOW THIS LINE
+// DO NOT EDIT LINES BELOW
 // ----------------------------------------------------------------------------
 
 
@@ -74,12 +74,11 @@ function publishHandler($postId)
   // Entry title.
   $title = $post->post_title;
   // Entry content.
+  $extractor = new P2M_JpegExtractor();
+  $images = $extractor->extract($post->post_content); 
+  
   // Take off all the html tags from the post since tags don't work in mixi post.
   $content = strip_tags($post->post_content);
-
-//  $fh = fopen('/tmp/mixitest.txt', 'r+');
-//  fwrite($fh, $content);
-//  fclose($fh);
 
   // Convert the encoding from utf-8 to euc-jp.
   // Mixi is based on euc-jp encoding.
@@ -90,30 +89,149 @@ function publishHandler($postId)
   $title = urlencode($title);
   $content = urlencode($content);
 
-//  $fh = fopen('/tmp/mixitest2.txt', 'r+');
-//  fwrite($fh, $content);
-//  fclose($fh);
-  
-  // Create MixiConnector instance.
-  $connector = new MixiConnector ($mixi_username, $mixi_password);
+  // Create P2M_MixiConnector instance.
+  $connector = new P2M_MixiConnector ($mixi_username, $mixi_password);
   // Publish the entry to mixi.
-  $connector->publishDiary($title, $content); 
+  $connector->publishDiary($title, $content, $images); 
 
   return $postId;
   
 }
 
 // Register actions to wordpress.
-add_action('dbx_post_advanced', 'renderOption');
-add_action('publish_post', 'publishHandler');
+if (function_exists('add_action'))
+{
+  add_action('dbx_post_advanced', 'renderOption');
+  add_action('publish_post', 'publishHandler');
+}
 
+
+
+/**
+ * Jpeg Extractor
+ * 
+ * Extracts jpeg image data from the IMG tags in the given HTML.
+ *
+ */
+class P2M_JpegExtractor
+{
+  var $debug = false;
+  // Mixi's max number of images per entry is 3. (using free account)
+  var $maxNumOfImages = 3;
+
+  /**
+   * Constructor.
+   *
+   * @return P2M_JpegExtractor
+   */
+  function P2M_JpegExtractor()
+  {
+  }
+  /**
+   * Extracts jpeg image data from the IMG tags in the given HTML.
+   * 
+   * @param string $html
+   */
+  function extract($html)
+  {
+    $urls = $this->_extractUrls($html);
+    $cnt = 0;
+    $images = array();
+    
+    for($i=0, $j=count($urls); $i<$j; $i++)
+    {
+      $image = $this->_getData($urls[$i]);
+      if ($this->debug) error_log ("P2M_JpegExtractor.extract(): URL: $urls[$i]");
+      if ($this->_isJpeg($image) == true)
+      {
+        if ($this->debug) error_log ("P2M_JpegExtractor.extract(): It is jpeg data.");
+        array_push($images, $image);
+        $cnt++;
+        if ($cnt == $this->maxNumOfImages)
+        {
+          break;
+        }
+      }
+    }
+    return $images;
+  }
+  
+  
+  /**
+  * Checking the data is really the jpeg data or not
+  * by checking the 7th - 11th byte of the data.
+  * If it is jpeg, the portion must be always 'JFIF' in string.
+  * http://en.wikipedia.org/wiki/JFIF
+  * 
+  * Update : If the image has Exif info, the previous logic doesn't work. 
+  * Changed the logic to look for the string 'JFIF' in the data.
+  * Ideally, it should understand the Exif headers. 
+  */
+  function _isJpeg ($data)
+  {
+    $idx = strpos($data, 'JFIF');
+    if ($idx == false)
+    {
+      return false;
+    }
+    else
+    {
+      return true;
+    }
+  }
+  /**
+   * 
+   *
+   * @param unknown_type $url
+   * @return unknown
+   */
+  function _getData($url)
+  {
+    $host = "";
+    $port = 80;
+    // Parse the URL to get the host name and port number.
+    preg_match ("/\/\/([^\/]+)\//", $url, $regs);
+    $arr = split(':', $regs[1]);
+    $host = $arr[0];
+    if (count($arr) == 2)
+      $port = intval($arr[1]);
+
+    if ($this->debug) error_log ("P2M_JpegExtractor._getData(): Host: >>>$host<<<, Port: >>>$port<<<");
+      
+    // Get the image data.
+    $client = new P2M_TinyHttpClient($host, $port);
+    $contents = $client->get($url);    
+    return $contents;
+  }  
+  
+  /**
+   * 
+   *
+   * @param unknown_type $html
+   * @return unknown
+   */
+  function _extractUrls($html)
+  {
+    $res = array();
+    preg_match_all("/(<img[^>]*>)/i", $html, $matches, PREG_SET_ORDER);
+    for ($i=0; $i<count($matches); $i++)
+    {
+      if ($this->debug) error_log ("P2M_JpegExtractor._extractUrls(): >>>$matches[$i][1]<<<");
+      preg_match("/src=\"([^\"]+)\"/i", $matches[$i][1], $url);
+      if ($this->debug) error_log ("P2M_JpegExtractor._extractUrls(): >>>$url[1]<<<");
+      array_push($res, $url[1]);
+    }
+    return $res;
+  }
+  
+}
 
 
 /**
  * Mixi connector class
  *
  */
-class MixiConnector
+class P2M_MixiConnector
 {
   var $debug = false;
   /**
@@ -121,9 +239,9 @@ class MixiConnector
    *
    * @param unknown_type $username
    * @param unknown_type $password
-   * @return MixiConnector
+   * @return P2M_MixiConnector
    */
-  function MixiConnector ($username = "", $password = "")
+  function P2M_MixiConnector ($username = "", $password = "")
   {
     $this->username = $username;
     $this->password = $password;
@@ -134,43 +252,101 @@ class MixiConnector
    * @param unknown_type $title
    * @param unknown_type $content
    */
-  function publishDiary($title = "", $content = "")
+  function publishDiary($title = "", $content = "", $images = null)
   {
     if ($title == "" || $content == "")
     {
       return;
     }
 
-    // Instanciate http client
-    $client = new TinyHttpClient("mixi.jp", 80);
-    // Create login URL param
-    $urlparam = "email=" . $this->username . "&password=" . $this->password . "&next_url=/home.pl&sticky=off";
-    // Login to mixi.
-    $response = $client->post("http://mixi.jp/login.pl", $urlparam);
-    if ($debug) echo htmlspecialchars($response);
-    // Access the check page after the login.
-    $response = $client->get("http://mixi.jp/check.pl?n=%2Fhome.pl");
-    if ($debug) echo htmlspecialchars($response);
-    // Access the home page.
-    $response = $client->get("http://mixi.jp/home.pl");
-    if ($debug) echo htmlspecialchars($response);
-    // Get the user id from the response.
-    $userid = $this->_getId($response);
-    // Post the diary to the mixi.
-    $response = $client->post("http://mixi.jp/add_diary.pl", "diary_body=" .
-    $content . "&diary_title=" .
-    $title . "&id=" .
-    $userid . "&tag_id=0&campaign_id=&invite_campaign=&news_title=&news_url=&movie_id=&movie_title=&movie_url=&submit=main");
-    if ($debug)  echo htmlspecialchars($response);
-    // Get the post key from the response.
-    $postkey = $this->_getPostKey($response);
-    // Access the post confirmation page.
-    $response = $client->post("http://mixi.jp/add_diary.pl", "diary_body=" .
-    $content . "&diary_title=" .
-    $title . "&id=" .
-    $userid . "&tag_id=0&campaign_id=&invite_campaign=&news_title=&news_url=&movie_id=&movie_title=&movie_url=&submit=confirm&post_key=" .
-    $postkey);
-    if ($debug) echo htmlspecialchars($response);
+    
+    try
+    {
+      error_log('[Message] P2M_MixiConnector.publishDiary(): Start publishing the dairy to mixi...');    
+      
+      // Instanciate http client
+      $client = new P2M_TinyHttpClient("mixi.jp", 80);
+      // Create login URL param
+      $params = array();
+      $params['email'] = $this->username;
+      $params['password'] = $this->password;
+      $params['next_url'] = '/home.pl';
+      $params['sticky'] = 'off';
+      // Login to mixi.
+      $response = $client->post("http://mixi.jp/login.pl", $params, false);    
+      if ($this->debug) error_log('P2M_MixiConnector.publishDiary():  ' . htmlspecialchars($response));    
+  
+      // Access the check page after the login.
+      $response = $client->get("http://mixi.jp/check.pl?n=%2Fhome.pl");
+      if ($this->debug) error_log('P2M_MixiConnector.publishDiary():  ' . htmlspecialchars($response));
+  
+      // Access the home page.
+      $response = $client->get("http://mixi.jp/home.pl");
+      if ($this->debug) error_log('P2M_MixiConnector.publishDiary():  ' . htmlspecialchars($response));
+      // Get the user id from the response.
+      $userid = $this->_getId($response);
+  
+      // Post the diary to the mixi.
+      $params = array();
+      $params['diary_body'] = $content;
+      $params['diary_title'] = $title;
+      $params['id'] = $userid;
+      $params['tag_id'] = '0';
+      $params['campaign_id'] = '';
+      $params['invite_campaign'] = '';
+      $params['news_title'] = '';
+      $params['news_url'] = '';
+      $params['movie_id'] = '';
+      $params['movie_title'] = '';
+      $params['movie_url'] = '';
+      $params['submit'] = 'main';
+      
+      if ($images != null)
+      {
+        for ($i=1, $j=count($images); $i<=$j; $i++)
+        {
+          $params["photo$i"] = 
+            array('name'=>"photo$i", 
+                  'filename'=>"photo$i.jpg", 
+                  'content-type'=>'image/jpeg',
+                  'data'=>$images[$i-1] );
+        }
+        error_log('[Message] P2M_MixiConnector.publishDiary(): Sending ' . count($images) . ' images to mixi.');    
+      }
+      
+      $response = $client->post("http://mixi.jp/add_diary.pl", $params, true);    
+      if ($this->debug) error_log('P2M_MixiConnector.publishDiary():  ' . htmlspecialchars($response));
+      // Get the post key from the response.
+      $postkey = $this->_getPostKey($response);
+      
+      // Access the post confirmation page.
+      $params['submit'] = 'confirm';
+      $params['post_key'] = $postkey;
+  
+      if ($images != null)
+      {
+        // Remove the image data from the parameter.
+        for ($i=1, $j=count($images); $i<=$j; $i++)
+        {
+          unset($params["photo$i"]);
+        }
+        // Get the 'packed' (image id) from the response.
+        $params['packed'] = $this->_getPacked($response); 
+  
+      }
+      
+      $response = $client->post("http://mixi.jp/add_diary.pl", $params, false);
+      if ($this->debug) error_log('P2M_MixiConnector.publishDiary():  ' . htmlspecialchars($response));
+
+      error_log('[Message] P2M_MixiConnector.publishDiary(): The diary has been successfully published to mixi!');    
+      
+      
+    }
+    catch (Exception $e) 
+    {
+        error_log('P2M_MixiConnector.publishDiary(): Caught exception: '. $e->getMessage());
+    }  
+
   }
 
   function _getId($string = "")
@@ -179,74 +355,105 @@ class MixiConnector
     if (preg_match ("/add_diary.pl\?id=([0-9]+)/", $string, $regs))
     {
       $id = $regs[1];
-      if ($this->debug) echo "## _getId : ID found : $id \n";
+      if ($this->debug) error_log("P2M_MixiConnector._getId(): ID found : $id ");
+    }
+    return $id;
+  }
+  /**
+   * Looks for the value for the 'post_key' in hidden form parameter
+   * from the given html.
+   * 
+   * @param unknown_type $html
+   * @return unknown
+   */
+  function _getPostKey($html = "")
+  {
+    $id = "";
+    if (preg_match ("/name=\"post_key\"\\s+value=\"([^\"]+)\"/", $html, $regs))
+    {
+      $id = $regs[1];
+      if ($this->debug) error_log("P2M_MixiConnector._getPostKey(): Post key found : $id ");
     }
     return $id;
   }
 
-  function _getPostKey($string = "")
+  /**
+   * Looks for the value for the 'packed' in hidden form parameter
+   * from the given html.
+   *
+   * @param string $html
+   * @return unknown
+   */
+  function _getPacked($html = "")
   {
     $id = "";
-    if (preg_match ("/name=\"post_key\" value=\"([0-9a-f]+)/", $string, $regs))
+    if (preg_match ("/name=\"packed\"\\s+value=\"([^\"]+)\"/", $html, $regs))
     {
       $id = $regs[1];
-      if ($this->debug) echo "## _getPostKey : Post key found : $id \n";
+      if ($this->debug) error_log("P2M_MixiConnector._getPacked(): packed found : $id ");
     }
     return $id;
   }
+  
+  
 }
 
 /**
  * Http client class
  */
-class TinyHttpClient
-{
+class P2M_TinyHttpClient {
   var $cookies = array();
   var $host = "";
   var $port = 80;
   var $debug = false;
-
+  
+  // Default request headers.
+  var $defaultHeaders = array();
+  var $mimeBoundary = "---------------------------111111111111111111111111111";
+  
   /**
    * constructor
    */
-  function TinyHttpClient($host = "", $port = 80)
-  {
+  function P2M_TinyHttpClient($host = "", $port = 80)  {
     $this->host = $host;
     $this->port = $port;
+    
+    # Init default http request headers.
+    $this->defaultHeaders["Host"] = $this->host;
+    $this->defaultHeaders["Accept"] = '*/*';
+    $this->defaultHeaders["Connection"] = "Close";
   }
 
   /**
    * Run GET http request.
    */
-  function get ($url = "")
+  function get ($url = "")  
   {
-    $res = "";
-    if ($url != "")
+    $res = null;
+    if ($url == "")  
+    {
+      error_log('P2M_TinyHttpClient.get(): $url is empty.');
+    } 
+    else 
     {
       $fp = fsockopen($this->host, $this->port, $errno, $errstr, 30);
-      if (!$fp)
+      if (!$fp)  
       {
-        $res = "$errstr ($errno)";
-      }
-      else
+        error_log("P2M_TinyHttpClient.get(): fsockopen failed: $errstr ($errno)");
+      } 
+      else 
       {
-        $out = "";
-        $out = "GET $url HTTP/1.1\r\n";
-        $out .= "Host: $this->host\r\n";
-        $out .= "Accept: */*\r\n";
-
-        if (count($this->cookies) > 0)
+        $headers = $this->defaultHeaders;
+        if (count($this->cookies) > 0) 
         {
-          $out .= "Cookie: ";
-          foreach ($this->cookies as $name=>$value)
-          {
-            $out .= "$name=$value;";
-          }
-          $out .= "\r\n";
+          $headers['Cookie'] = $this->_constructCookieString();
         }
-        $out .= "Connection: Close\r\n\r\n";
+        
+        $out = "GET $url HTTP/1.1\r\n";
+        $out .= $this->_constructHeaderString($headers);
+        $out .= "\r\n";
         fwrite($fp, $out);
-        if ($this->debug) echo "## $out \n";
+        if ($this->debug) error_log("P2M_TinyHttpClient.get():  $out ");
 
         while (!feof($fp)) 
         {
@@ -254,50 +461,67 @@ class TinyHttpClient
         }
         fclose($fp);
       }
+      $this->_parseCookies($res);
     }
-    $this->_parseCookies($res);
+    // cut off the response headers
+    $res = substr($res, strpos($res, "\r\n\r\n") + 4);
     return $res;
   }
 
   /**
    * Run POST http request.
    */
-  function post ($url = "", $param = "")
+  function post ($url = "", $params = null, $isMime = false)
   {
     $res = "";
-    if ($url != "")
+    
+    if ($url == "")  
+    {
+      error_log('P2M_TinyHttpClient.post(): $url is empty.');
+    } 
+    elseif ($params == null) 
+    {
+      error_log('P2M_TinyHttpClient.post(): $params is empty.');
+    } 
+    else
     {
       $fp = fsockopen($this->host, $this->port, $errno, $errstr, 30);
       if (!$fp)
       {
-        $res = "$errstr ($errno)";
+        error_log("P2M_TinyHttpClient.post(): fsockopen failed: $errstr ($errno)");
       }
       else
       {
-        $out = "";
-        $out = "POST $url HTTP/1.1\r\n";
-        $out .= "Host: $this->host\r\n";
-        $out .= "Accept: */*\r\n";
-        $out .= "Connection: Close\r\n";
-        $out .= "Content-Type: application/x-www-form-urlencoded\r\n";
 
+        $headers = $this->defaultHeaders;
+        
+        $postdata = null; 
+        
+        if ($isMime == false)
+        {
+          $headers['Content-Type'] = 'application/x-www-form-urlencoded';
+          $postdata = $this->_constructPostData($params);
+        }
+        else
+        {
+          $headers['Content-Type'] = 'multipart/form-data; boundary=' . $this->mimeBoundary;
+          $postdata = $this->_constructMimeData($params);
+        }
+        $headers['Content-Length'] = strlen($postdata);
+                
         if (count($this->cookies) > 0)
         {
-          $out .= "Cookie: ";
-          foreach ($this->cookies as $name=>$value)
-          {
-            $out .= "$name=$value;";
-          }
-          $out .= "\r\n";
-        }
-        $out .= "Content-Length: ";
-        $out .= strlen($param);
-        $out .= "\r\n\r\n";
-        $out .= $param;
+          $headers['Cookie'] = $this->_constructCookieString();
+        }        
+               
+        $out = "POST $url HTTP/1.1\r\n";
+        $out .= $this->_constructHeaderString($headers);
         $out .= "\r\n";
+        $out .= $postdata;
+//        $out .= "\r\n";
         fwrite($fp, $out);
-        if ($this->debug) echo "## $out \n";
-
+        if ($this->debug) error_log("P2M_TinyHttpClient.post():  $out ");
+        
         while (!feof($fp))
         {
           $res .=  fgets($fp, 128);
@@ -306,35 +530,109 @@ class TinyHttpClient
       }
     }
     $this->_parseCookies($res);
+    // cut off the response headers
+    $res = substr($res, strpos($res, "\r\n\r\n") + 4);
     return $res;
-  }
-
-
+  }  
   /**
    * Parse the cookies from the http response
    */
   function _parseCookies($res)
   {
+    if ($res == '') return;
+
+    // cut off the response body
+    $res = substr($res, 0, strpos($res, "\r\n\r\n"));
+    if ($this->debug) error_log("P2M_TinyHttpClient._parseCookies():  _parseCookies(): Response header: ".$res);
+    
     $lines = explode("\r\n", $res);
+    if ($this->debug) error_log("P2M_TinyHttpClient._parseCookies():  _parseCookies(): count(lines) ".count($lines));
     $index = -1;
     foreach ($lines as $line)
     {
       if (preg_match ("/^Set-Cookie/i", $line))
       {
-        if ($this->debug) echo "## _parseCookies() : cookie found :  $line \n";
+        if ($this->debug) error_log("P2M_TinyHttpClient._parseCookies():  _parseCookies(): cookie found :  $line ");
         $params = explode(";", $line);
         $cookie = explode (":", $params[0]);
         $cookie = explode ("=", $cookie[1]);
-        if ($this->debug) echo "## _parseCookies() : $cookie[0] = $cookie[1] \n";
+        if ($this->debug) error_log("P2M_TinyHttpClient._parseCookies():  _parseCookies(): $cookie[0] = $cookie[1]");
         $this->cookies[trim($cookie[0])] = trim($cookie[1]);
       }
       else
       {
-        if ($this->debug) echo "## _parseCookies() : cookie not found in this line\n";
+        if ($this->debug) error_log("P2M_TinyHttpClient._parseCookies():  _parseCookies(): cookie not found in this line");
       }
     }
-    if ($this->debug)  print_r($this->cookies);
   }
+
+  function _constructCookieString()
+  {
+    $str = "";
+    foreach ($this->cookies as $name=>$value)
+    {
+      $str .= "$name=$value;";
+    }
+    return $str;
+  }
+
+  function _constructHeaderString($headers)
+  {
+    $str = "";
+    foreach ($headers as $name=>$value)
+    {
+      $str .= "$name: $value\r\n";
+    }
+    return $str;
+  }
+
+  function _constructPostData($params)
+  {
+    $str = "";
+    foreach ($params as $name=>$value)
+    {
+      $str .= "$name=$value&";
+    }
+    // Take off the last '&'
+    $str = substr($str, 0, strlen($str)-1);
+    return $str;
+  }
+  
+  function _constructMimeData($params)
+  {
+    $str = "";
+    foreach ($params as $name=>$value)
+    {
+      
+      if (is_string($value))
+      {
+        $str .= '--';
+        $str .= $this->mimeBoundary;
+        $str .= "\r\n"; 
+        $str .= "Content-Disposition: form-data; name=\"$name\"\r\n\r\n";      
+        $str .= "$value\r\n";
+      }
+      elseif (is_array($value))
+      {
+        $str .= '--' . $this->mimeBoundary;
+        $str .= "\r\n"; 
+        $str .= 'Content-Disposition: form-data; name="'.$value['name'].'"; ' ;
+        $str .= 'filename="';
+        $str .= $value['filename'];
+        $str .= "\"\r\n";
+//        $str .= "Content-Transfer-Encoding: base64\r\n"; 
+        $str .= 'Content-type:';
+        $str .= $value['content-type'];
+        $str .= "\r\n\r\n";
+//        $str .= chunk_split(base64_encode($value['data'])) ;
+        $str .= $value['data'];
+        $str .= "\r\n";
+      }
+      
+    }
+    $str .= '--' . $this->mimeBoundary . "--"; 
+    return $str;
+  }  
 }
 
 
