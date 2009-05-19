@@ -1,0 +1,20 @@
+Publish to Mixi 
+README
+
+2008/6/14
+Kei Saito　(http://ksnn.com/)
+
+
+Wordpress への投稿を Mixi にも自動的に投稿するプラグインです。
+[使い方]プラグインをインストールして有効にすると、投稿を入力する画面に、
+「Publish To Mixi」というオプションが現れるようになります。
+投稿するときにここをチェックすると、同じ投稿が Mixi にも投稿されます。
+
+Wordpress に投稿に使われたリンクや画像などの HTML タグは
+mixiに送られるときにすべて取り除かれます。[動作環境]Wordpress 2.5系で PHP5系ならとりあえず動くと思います。
+PHP 標準の機能だけで書いてあるので、別途必要なライブラリはありません。[インストール方法]1. Zipファイルをダウンロードして解凍します2. publishToMixi.php というファイルをテキストエディタで開いて、
+　　$mixi_username と $mixi_password にそれぞれ
+　　自分の mixi のユーザ名をパスワードを設定します3. publishToMixi.php を wp-content/plugins フォルダにコピーします4. 管理画面からプラグインを有効にします
+[ライセンス]利用は無料です。ライセンスは GPL(http://www.gnu.org/licenses/)です。
+
+[開発環境]Mac OS X 10.5Apache 2.2.8PHP 5.2.5 (mod_php)Wordpress 2.5.1
