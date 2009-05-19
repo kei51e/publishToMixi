@@ -358,15 +358,8 @@ function sanitize_content ( $text ) {
 		),
 		$ret );
 	$ret = strip_tags( $ret );
-	$ret = preg_replace(
-		array(
-			"@&nbsp;@i",
-		),
-		array(
-			" ",
-		),
-		$ret );
-	$ret = html_entity_decode( $ret, ENT_QUOTES, "utf-8" );
+	// &nbsp; -> &amp;nbsp; etc.
+	$ret = htmlspecialchars( $ret, ENT_QUOTES, "utf-8" );
 	return $ret;
 }
 
