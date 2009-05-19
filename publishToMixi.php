@@ -221,7 +221,13 @@ function P2Mixi_publishHandler ( $postId ) {
 	// will be replaced like 'mixi (http://mixi.jp)'.  
 	// TODO: It should be able to handle more complex links.  
 	// The logic can handle only simple <a> tags now.
-	$body = preg_replace('/<a\s*href\=\"([^\"]*)\"[^>]*>([^<]*)<\/a>/i', '${2}(${1})', $body);
+	$body = preg_replace_callback(
+		'/<a\s*href\=\"([^\"]*)\"[^>]*>([^<]*)<\/a>/i',
+		create_function(
+			'$m',
+			'return $m[1] == $m[2] ? $m[1] : "$m[2]($m[1])";'
+		),
+		$body);
 		
 	// Footer text	
 	if ( $footer != '' ) {
