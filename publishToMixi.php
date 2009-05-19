@@ -4,7 +4,7 @@
  Plugin URI: http://ksnn.com/diary/?p=2035
  Description: Publish the post to Mixi.
  Author: Kei Saito
- Version: 1.2
+ Version: 1.2.1
  Author URI: http://ksnn.com/
  */
 
@@ -61,41 +61,21 @@ function publishHandler ( $postId ) {
 	if ( $_POST['publishToMixi'] != 1 ) {
 		return $postId;
 	}
-
 	// Get the post detail from wordpress.
 	$post = get_post( $postId );
 	if ( $post->post_status != 'publish' ) {
 		return $postId;
 	}
-
-	// Entry title.
-	$title = $post->post_title;
-	// Entry content.
+	// Extracting images from the post content.
 	$extractor = new P2M_JpegExtractor();
 	$images = $extractor->extract( $post->post_content );
-
-	// Take off all the html tags from the post since tags don't work in mixi post.
-	$content = strip_tags( $post->post_content );
-	// If there are more than 2 line breaks, remove redundant line breaks and
-	// make it 2 line breaks.
-	$content = preg_replace( "/(\\r\\n){3,}/", "\r\n\r\n", $content );
-
-	// Convert the encoding from utf-8 to euc-jp.
-	// Mixi is based on euc-jp encoding.
-	$title = iconv( "utf-8", "euc-jp", $title );
-	$content = iconv( "utf-8", "euc-jp", $content );
-
-	// URL encode the title and content.
-	$title = urlencode( $title );
-	$content = urlencode( $content );
 
 	// Create P2M_MixiConnector instance.
 	$connector = new P2M_MixiConnector ( $mixi_username, $mixi_password );
 	// Publish the entry to mixi.
-	$connector->publishDiary( $title, $content, $images );
+	$connector->publishDiary( $post->post_title, $post->post_content, $images );
 
 	return $postId;
-
 }
 
 // Register actions to wordpress.
@@ -103,8 +83,6 @@ if ( function_exists( 'add_action' ) ) {
 	add_action( 'dbx_post_advanced', 'renderOption' );
 	add_action( 'publish_post', 'publishHandler' );
 }
-
-
 
 /**
  * Jpeg Extractor
@@ -240,94 +218,117 @@ class P2M_MixiConnector {
 		if ( $title == "" || $content == "" ) {
 			return;
 		}
-		try	{
-			error_log( '[Message] P2M_MixiConnector.publishDiary(): Start publishing the dairy to mixi...' );
-
-			// Instanciate http client
-			$client = new P2M_TinyHttpClient( "mixi.jp", 80 );
-			// Create login URL param
-			$params = array();
-			$params['email'] = $this->username;
-			$params['password'] = $this->password;
-			$params['next_url'] = '/home.pl';
-			$params['sticky'] = 'off';
-			// Login to mixi.
-			$response = $client->post( "http://mixi.jp/login.pl", $params, false );
-			if ( $this->debug ) error_log( 'P2M_MixiConnector.publishDiary():  ' . htmlspecialchars( $response ) );
-			sleep(1);
-			
-			// Access the check page after the login.
-			$response = $client->get( "http://mixi.jp/check.pl?n=%2Fhome.pl" );
-			if ( $this->debug ) error_log( 'P2M_MixiConnector.publishDiary():  ' . htmlspecialchars( $response ) );
-			sleep(1);
-			
-			// Access the home page.
-			$response = $client->get( "http://mixi.jp/home.pl" );
-			if ( $this->debug ) error_log( 'P2M_MixiConnector.publishDiary():  ' . htmlspecialchars( $response ) );
-			// Get the user id from the response.
-			$userid = $this->_getId( $response );
-
-			if ( $userid == "" ) {
-				error_log( '[Message] P2M_MixiConnector.publishDiary(): ID not found. Maybe you failed to login mixi. Exiting...' );
-				return;
-			}
-
-			// Post the diary to the mixi.
-			$params = array();
-			$params['diary_body'] = $content;
-			$params['diary_title'] = $title;
-			$params['id'] = $userid;
-			$params['tag_id'] = '0';
-			$params['campaign_id'] = '';
-			$params['invite_campaign'] = '';
-			$params['news_title'] = '';
-			$params['news_url'] = '';
-			$params['movie_id'] = '';
-			$params['movie_title'] = '';
-			$params['movie_url'] = '';
-			$params['submit'] = 'main';
-
-			if ( $images != null ) {
-				for ( $i = 1, $j = count( $images ); $i <= $j; $i++ )	{
-					$params["photo$i"] =
-						array( 'name'=>"photo$i",
-              			'filename'=>"photo$i.jpg", 
-						'content-type'=>'image/jpeg',
-						'data'=>$images[$i-1] );
-				}
-				error_log( '[Message] P2M_MixiConnector.publishDiary(): Sending ' . count( $images ) . ' images to mixi.' );
-			}
-			sleep(1);
-			
-			$response = $client->post( "http://mixi.jp/add_diary.pl", $params, true );
-			if ( $this->debug ) error_log( 'P2M_MixiConnector.publishDiary():  ' . htmlspecialchars( $response ) );
-			// Get the post key from the response.
-			$postkey = $this->_getPostKey( $response );
-
-			// Access the post confirmation page.
-			$params['submit'] = 'confirm';
-			$params['post_key'] = $postkey;
-
-			if ( $images != null ) {
-				// Remove the image data from the parameter.
-				for ( $i = 1, $j = count( $images ); $i <= $j; $i++ ) {
-					unset( $params["photo$i"] );
-				}
-				// Get the 'packed' (image id) from the response.
-				$params['packed'] = $this->_getPacked( $response );
-
-			}
-			sleep(1);
-			
-			$response = $client->post( "http://mixi.jp/add_diary.pl", $params, false );
-			if ( $this->debug ) error_log( 'P2M_MixiConnector.publishDiary():  ' . htmlspecialchars( $response ) );
-
-			error_log( '[Message] P2M_MixiConnector.publishDiary(): The diary has been successfully published to mixi!' );
-
-
-		} catch ( Exception $e ) {
-			error_log( 'P2M_MixiConnector.publishDiary(): Caught exception: '. $e->getMessage() );
+		
+		error_log( '[Message] P2M_MixiConnector.publishDiary(): Start publishing the dairy to mixi...' );
+		
+		// Take off all the html tags from the post since tags don't work in mixi post.
+		$content = strip_tags( $content );
+		// If there are more than 2 line breaks, remove redundant line breaks and
+		// make it 2 line breaks.
+		$content = preg_replace( "/(\\r\\n){3,}/", "\r\n\r\n", $content );
+		// escape unicode special chars to html numeric character references.
+		$content = $this->_replaceSpecialChars( $content );
+		$title = $this->_replaceSpecialChars( $title );		
+		// Convert the encoding from utf-8 to euc-jp.
+		// Mixi is based on euc-jp encoding.
+		// Use mb_convert_encoding if available, if not, use iconv.
+		if ( function_exists( 'mb_convert_encoding' ) ) {
+			error_log( '[Message]　P2M_MixiConnector.publishDiary(): Using mb_convert_encoding() for conversion.' );
+			$title = mb_convert_encoding( "utf-8", "euc-jp", $title );
+			$content = mb_convert_encoding( "utf-8", "euc-jp", $content );
+		} else {
+			error_log( '[Message]　P2M_MixiConnector.publishDiary(): Using iconv() for conversion.' );
+			$title = iconv( "utf-8", "euc-jp", $title );
+			$content = iconv( "utf-8", "euc-jp", $content );
 		}
+		
+		// URL encode the title and content.
+		$title = urlencode( $title );
+		$content = urlencode( $content );
+		
+		
+		// Instanciate http client
+		$client = new P2M_TinyHttpClient( "mixi.jp", 80 );
+		// Create login URL param
+		$params = array();
+		$params['email'] = $this->username;
+		$params['password'] = $this->password;
+		$params['next_url'] = '/home.pl';
+		$params['sticky'] = 'off';
+		// Login to mixi.
+		$response = $client->post( "http://mixi.jp/login.pl", $params, false );
+		if ( $this->debug ) error_log( 'P2M_MixiConnector.publishDiary():  ' . htmlspecialchars( $response ) );
+		sleep(1);
+		
+		// Access the check page after the login.
+		$response = $client->get( "http://mixi.jp/check.pl?n=%2Fhome.pl" );
+		if ( $this->debug ) error_log( 'P2M_MixiConnector.publishDiary():  ' . htmlspecialchars( $response ) );
+		sleep(1);
+		
+		// Access the home page.
+		$response = $client->get( "http://mixi.jp/home.pl" );
+		if ( $this->debug ) error_log( 'P2M_MixiConnector.publishDiary():  ' . htmlspecialchars( $response ) );
+		// Get the user id from the response.
+		$userid = $this->_getId( $response );
+
+		if ( $userid == "" ) {
+			error_log( '[Message] P2M_MixiConnector.publishDiary(): ID not found. Maybe you failed to login mixi. Exiting...' );
+			return;
+		}
+
+		// Post the diary to the mixi.
+		$params = array();
+		$params['diary_body'] = $content;
+		$params['diary_title'] = $title;
+		$params['id'] = $userid;
+		$params['tag_id'] = '0';
+		$params['campaign_id'] = '';
+		$params['invite_campaign'] = '';
+		$params['news_title'] = '';
+		$params['news_url'] = '';
+		$params['movie_id'] = '';
+		$params['movie_title'] = '';
+		$params['movie_url'] = '';
+		$params['submit'] = 'main';
+
+		// It would be better to do the base64 encoding for images but we just send as is now 
+		// since mixi can understand those raw image mime contents.  
+		if ( $images != null ) {
+			for ( $i = 1, $j = count( $images ); $i <= $j; $i++ )	{
+				$params["photo$i"] =
+					array( 'name'=>"photo$i",
+              		'filename'=>"photo$i.jpg", 
+					'content-type'=>'image/jpeg',
+					'data'=>$images[$i-1] );
+			}
+			error_log( '[Message] P2M_MixiConnector.publishDiary(): Sending ' . count( $images ) . ' images to mixi.' );
+		}
+		sleep(1);
+		
+		$response = $client->post( "http://mixi.jp/add_diary.pl", $params, true );
+		if ( $this->debug ) error_log( 'P2M_MixiConnector.publishDiary():  ' . htmlspecialchars( $response ) );
+		// Get the post key from the response.
+		$postkey = $this->_getPostKey( $response );
+
+		// Access the post confirmation page.
+		$params['submit'] = 'confirm';
+		$params['post_key'] = $postkey;
+
+		if ( $images != null ) {
+			// Remove the image data from the parameter.
+			for ( $i = 1, $j = count( $images ); $i <= $j; $i++ ) {
+				unset( $params["photo$i"] );
+			}
+			// Get the 'packed' (image id) from the response.
+			$params['packed'] = $this->_getPacked( $response );
+
+		}
+		sleep(1);
+		
+		$response = $client->post( "http://mixi.jp/add_diary.pl", $params, false );
+		if ( $this->debug ) error_log( 'P2M_MixiConnector.publishDiary():  ' . htmlspecialchars( $response ) );
+
+		error_log( '[Message] P2M_MixiConnector.publishDiary(): The diary has been successfully published to mixi!' );
 
 	}
 
@@ -371,7 +372,21 @@ class P2M_MixiConnector {
 		return $id;
 	}
 
-
+	/**
+	 * Replaces utf-8 special chars to the numeric character references. 
+	 * TODO: This function should be located in an appropriate location.
+	 * 
+	 * @param string $html
+	 * @return html string
+	 */
+	function _escapeSpecialChars( $html = "" )
+	{
+		// music notes
+		$html = str_replace("\xE2\x99\xAB", "&#9835;", $html);
+		// TODO: should have more...
+		
+		return $html;
+	}
 }
 
 /**
