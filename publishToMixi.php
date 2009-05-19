@@ -2,15 +2,15 @@
 /*
  Plugin Name: publishToMixi
  Plugin URI: http://ksnn.com/diary/?page_id=2437
- Description: Publish the post to Mixi.
+ Description: Publish the post to Mixi using AtomPub
  Author: Kei Saito
- Version: 1.4
+ Version: 2.0
  Author URI: http://ksnn.com/
  */
 
 /*
  * A wordpress plugin to publish the post to Mixi
- * Copyright (C) 2008 Kei Saito (http://ksnn.com/)
+ * Copyright (C) 2008,2009 Kei Saito (http://ksnn.com/)
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -31,6 +31,8 @@
 // Set your mixi login username (email addess) and password here.
 $P2Mixi_username = "your_email@gmail.com";
 $P2Mixi_password = "your_password";
+// Your Mixi ID - numbers only.
+$P2Mixi_id = "your_mixi_id";
 
 // Publish to Mixi checkbox default value.
 // If this is true, Publish to Mixi checkbox is checked by default. 
@@ -43,17 +45,10 @@ $P2Mixi_headerDefault = '';
 // '%%URL%%' will be replaced with the post permalink. 
 $P2Mixi_footerDefault = '';
 
-// Your WordPress encoding. In most of cases, it is 'utf-8'.
-// Modify it if you use the other encoding for your wordpress.
-$P2Mixi_wordpressEncoding = 'utf-8';
-// Mixi encoding. So far they use 'euc-jp'. 
-// Don't modify this.
-$P2Mixi_mixiEncoding = 'euc-jp';
-
+// Debug mode - for debug purpose only
+$P2Mixi_debug = false;
 
 // ----------------------------------------------------------------------------
-
-
 /**
  * Renders the option box in the "Write Post" page in the wordpress admin.
  */
@@ -99,7 +94,7 @@ function P2Mixi_renderOptionContent () {
  * @return postId
  */
 function P2Mixi_publishHandler ( $postId ) {
-	global $P2Mixi_username, $P2Mixi_password, $P2Mixi_wordpressEncoding, $P2Mixi_mixiEncoding;
+	global $P2Mixi_username, $P2Mixi_password, $P2Mixi_id;
 
 	// verify this came from the our screen and with proper authorization,
 	// because publish_post can be triggered at other times
@@ -121,27 +116,97 @@ function P2Mixi_publishHandler ( $postId ) {
 
 	// Header text
 	$header = trim( $_POST['P2Mixi_headertext'] );
-	if ( $header != '' )
-	{
+	if ( $header != '' ) {
 		$header = str_replace( '%%URL%%', $post->guid, $header );
 		$header = $header . "\r\n\r\n";
 	}
+
+	// Body text
+	$body = $post->post_content;
+	// Extract the URL info from <a> tags in the post content
+	// to keep the link information since all HTML tags will be stripped by mixi.
+	// For example, The following string '<a href="http://mixi.jp">mixi</a>'
+	// will be replaced like 'mixi (http://mixi.jp)'.  
+	// TODO: It should be able to handle more complex links.  
+	// The logic can handle only simple <a> tags now.
+	$body = preg_replace('/<a\s*href\=\"([^\"]*)\"[^>]*>([^<]*)<\/a>/i', '${2}(${1})', $body);
 		
 	// Footer text	
 	$footer = trim( $_POST['P2Mixi_footertext'] );
-	if ( $footer != '' )
-	{
+	if ( $footer != '' ) {
 		$footer = str_replace( '%%URL%%', $post->guid, $footer );
 		$footer = "\r\n\r\n" . $footer;
 	}
-	// content = header + content + footer	
-	$content = $header . $post->post_content . $footer;
-	// Create P2Mixi_MixiConnector instance.
-	$connector = new P2Mixi_MixiConnector ( $P2Mixi_username, $P2Mixi_password );
-	// Publish the entry to mixi.
-	$connector->publishDiary( $post->post_title, $content, $images, $P2Mixi_wordpressEncoding, $P2Mixi_mixiEncoding );
-	
+	// content = header + body + footer	
+	$content = $header . $body . $footer;
+	// Publish to Mixi
+	P2Mixi_publishToMixi( $P2Mixi_username, $P2Mixi_password, $P2Mixi_id, $post->post_title, $content, $images );
 	return $postId;
+}
+
+//function P2Mixi_publishToMixi ( $username, $password, $id, $title, $content, $images　) 
+function P2Mixi_publishToMixi () {	
+	global $P2Mixi_debug;
+	
+	// Using variable number of parameters. 
+	$args = func_get_args();
+	$username = $args[0];
+	$password = $args[1];
+	$id       = $args[2];
+	$title    = $args[3];
+	$content  = $args[4];
+	if ( func_num_args() == 6 )
+	{
+		$images   = $args[5];
+	}
+	
+	// WSSE Authentication
+	$nonce       = pack('H*', sha1(md5(time().rand().posix_getpid())));
+	$created     = date('Y-m-d\TH:i:s\Z');
+	$digest      = base64_encode(pack('H*', sha1($nonce . $created . $password)));
+	$wsse_text   = 'UsernameToken Username="%s", PasswordDigest="%s", Nonce="%s", Created="%s"';
+	$wsse_header = sprintf($wsse_text, $username, $digest, base64_encode($nonce), $created);
+	
+	// mixi POST URL
+	$url = 'http://mixi.jp/atom/diary/member_id=' . $id;
+	$client = new P2Mixi_TinyHttpClient( "mixi.jp", 80 );
+	$client->setDebugMode($P2Mixi_debug);
+	
+	//------------------------------------------------------------
+	// Post Image
+	//------------------------------------------------------------
+	if ( $P2Mixi_debug ) error_log ( "P2Mixi_publishToMixi(): # of images : " . sizeof( $images ) );
+	if ( sizeof( $images ) > 0 )
+	{
+		if ( $P2Mixi_debug ) error_log ( "P2Mixi_publishToMixi(): Uploading images to Mixi." );
+		$client->addRequestHeader('X-WSSE', $wsse_header);
+		$client->addRequestHeader('Content-Type', 'image/jpeg');
+		$client->post( $url, $images[0] );		
+		$headers  = $client->getResponseHeaders();
+		$location = $headers['Location'];
+		if ( $P2Mixi_debug ) error_log ( "P2Mixi_publishToMixi(): Finished uploading images to Mixi." );
+		if ( $P2Mixi_debug ) error_log ( "P2Mixi_publishToMixi(): location: $location" );
+		
+		if ( $location != '' )
+		{
+			$url = $location;
+		}
+	}
+	
+	//------------------------------------------------------------
+	// Post Text
+	//------------------------------------------------------------
+	$body = "<?xml version='1.0' encoding='utf-8'?>"
+    . "<entry xmlns='http://www.w3.org/2007/app'>"
+	. "<title>$title</title>"
+	. "<summary>$content</summary>"
+	. "</entry>";
+	
+	$client->addRequestHeader('X-WSSE', $wsse_header);
+	$client->addRequestHeader('Content-Type', 'application/atom+xml');
+	if ( $P2Mixi_debug ) error_log ( "P2Mixi_publishToMixi(): Uploading text to Mixi." );
+	$client->post( $url, $body );
+	if ( $P2Mixi_debug ) error_log ( "P2Mixi_publishToMixi(): Finished uploading text to Mixi." );	
 }
 
 // Register actions to wordpress.
@@ -158,8 +223,8 @@ if ( function_exists( 'add_action' ) ) {
  */
 class P2Mixi_JpegExtractor {
 	var $debug = false;
-	// Mixi's max number of images per entry is 3. (using free account)
-	var $maxNumOfImages = 3;
+	// Mixi's max number of images per entry through AtomPub API is 1. 
+	var $maxNumOfImages = 1;
 
 	/**
 	 * Constructor.
@@ -168,6 +233,12 @@ class P2Mixi_JpegExtractor {
 	 */
 	function P2Mixi_JpegExtractor () {
 	}
+	
+	function setDebugMode ( $debug )
+	{
+		$this->debug = $debug;
+	}
+		
 	/**
 	 * Extracts jpeg image data from the IMG tags in the given HTML.
 	 *
@@ -180,7 +251,7 @@ class P2Mixi_JpegExtractor {
 
 		for ($i=0, $j=count ( $urls ); $i<$j; $i++ )	{
 			$image = $this->_getData( $urls[$i] );
-			if ( $this->debug ) error_log ( "P2Mixi_JpegExtractor.extract(): URL: $urls[$i]" );
+			if ( $this->debug ) error_log ( "P2Mixi_JpegExtractor.extract(): Image URL: $urls[$i], size : ". strlen( $image ) );
 			if ( $this->_isJpeg( $image ) == true )	{
 				if ( $this->debug ) error_log ( "P2Mixi_JpegExtractor.extract(): It is jpeg data." );
 				array_push( $images, $image );
@@ -192,7 +263,6 @@ class P2Mixi_JpegExtractor {
 		}
 		return $images;
 	}
-
 
 	/**
 	 * Checking the data is really the jpeg data or not
@@ -228,10 +298,11 @@ class P2Mixi_JpegExtractor {
 		if ( count( $arr ) == 2 )
 			$port = intval( $arr[1] );
 
-		if ( $this->debug ) error_log ( "P2Mixi_JpegExtractor._getData(): Host: >>>$host<<<, Port: >>>$port<<<" );
+		if ( $this->debug ) error_log ( "P2Mixi_JpegExtractor._getData(): Host >>>$host<<< Port >>>$port<<<" );
 
 		// Get the image data.
 		$client = new P2Mixi_TinyHttpClient( $host, $port );
+		$client->setDebugMode($this->debug);
 		$contents = $client->get( $url );
 		return $contents;
 	}
@@ -253,205 +324,6 @@ class P2Mixi_JpegExtractor {
 		}
 		return $res;
 	}
-
-}
-
-
-/**
- * Mixi connector class
- *
- */
-class P2Mixi_MixiConnector {
-	var $debug = false;
-	/**
-	 * constructor
-	 *
-	 * @param unknown_type $username
-	 * @param unknown_type $password
-	 * @return P2Mixi_MixiConnector
-	 */
-	function P2Mixi_MixiConnector ( $username = "", $password = "" ) {
-		$this->username = $username;
-		$this->password = $password;
-	}
-	/**
-	 * Posts the diary to mixi.
-	 *
-	 * @param unknown_type $title
-	 * @param unknown_type $content
-	 */
-	function publishDiary ( $title = "", $content = "", $images = null, $wordpressEncoding = "utf-8", $mixiEncoding = "euc-jp" ) {
-		if ( $title == "" || $content == "" ) {
-			return;
-		}
-		
-		error_log( '[Message] P2Mixi_MixiConnector.publishDiary(): Start publishing the dairy to mixi...' );
-		
-		// Take off all the html tags from the post since tags don't work in mixi post.
-		$content = strip_tags( $content );
-		// If there are more than 2 line breaks, remove redundant line breaks and
-		// make it 2 line breaks.
-		$content = preg_replace( "/(\\r\\n){3,}/", "\r\n\r\n", $content );
-		// escape unicode special chars to html numeric character references.
-		$content = $this->_escapeSpecialChars( $content );
-		$title = $this->_escapeSpecialChars( $title );		
-		// Convert the encoding from utf-8 to euc-jp.
-		// Mixi is based on euc-jp encoding.
-		// Use mb_convert_encoding if available, if not, use iconv.
-		if ( function_exists( 'mb_convert_encoding' ) ) {
-			error_log( '[Message] P2Mixi_MixiConnector.publishDiary(): Using mb_convert_encoding() for conversion.' );
-			$title = mb_convert_encoding( $title, $mixiEncoding, $wordpressEncoding );
-			$content = mb_convert_encoding( $content, $mixiEncoding, $wordpressEncoding );
-		} else {
-			error_log( '[Message] P2Mixi_MixiConnector.publishDiary(): Using iconv() for conversion.' );
-			$title = iconv( $wordpressEncoding, $mixiEncoding, $title );
-			$content = iconv( $wordpressEncoding, $mixiEncoding, $content );
-		}
-		
-		// URL encode the title and content.
-		$title = urlencode( $title );
-		$content = urlencode( $content );
-		
-		// Instanciate http client
-		$client = new P2Mixi_TinyHttpClient( "mixi.jp", 80 );
-		// Create login URL param
-		$params = array();
-		$params['email'] = $this->username;
-		$params['password'] = $this->password;
-		$params['next_url'] = '/home.pl';
-		$params['sticky'] = 'off';
-		// Login to mixi.
-		$response = $client->post( "http://mixi.jp/login.pl", $params, false );
-		if ( $this->debug ) error_log( 'P2Mixi_MixiConnector.publishDiary():  ' . htmlspecialchars( $response ) );
-		sleep(1);
-		
-		// Access the check page after the login.
-		$response = $client->get( "http://mixi.jp/check.pl?n=%2Fhome.pl" );
-		if ( $this->debug ) error_log( 'P2Mixi_MixiConnector.publishDiary():  ' . htmlspecialchars( $response ) );
-		sleep(1);
-		
-		// Access the home page.
-		$response = $client->get( "http://mixi.jp/home.pl" );
-		if ( $this->debug ) error_log( 'P2Mixi_MixiConnector.publishDiary():  ' . htmlspecialchars( $response ) );
-		// Get the user id from the response.
-		$userid = $this->_getId( $response );
-
-		if ( $userid == "" ) {
-			error_log( '[Message] P2Mixi_MixiConnector.publishDiary(): ID not found. Maybe you failed to login mixi. Exiting...' );
-			return;
-		}
-
-		// Post the diary to the mixi.
-		$params = array();
-		$params['diary_body'] = $content;
-		$params['diary_title'] = $title;
-		$params['id'] = $userid;
-		$params['tag_id'] = '0';
-		$params['campaign_id'] = '';
-		$params['invite_campaign'] = '';
-		$params['news_title'] = '';
-		$params['news_url'] = '';
-		$params['movie_id'] = '';
-		$params['movie_title'] = '';
-		$params['movie_url'] = '';
-		$params['submit'] = 'main';
-
-		// It would be better to do the base64 encoding for images but we just send as is now 
-		// since mixi can understand those raw image mime contents.  
-		if ( $images != null ) {
-			for ( $i = 1, $j = count( $images ); $i <= $j; $i++ )	{
-				$params["photo$i"] =
-					array( 'name'=>"photo$i",
-              		'filename'=>"photo$i.jpg", 
-					'content-type'=>'image/jpeg',
-					'data'=>$images[$i-1] );
-			}
-			error_log( '[Message] P2Mixi_MixiConnector.publishDiary(): Sending ' . count( $images ) . ' images to mixi.' );
-		}
-		sleep(1);
-		
-		$response = $client->post( "http://mixi.jp/add_diary.pl", $params, true );
-		if ( $this->debug ) error_log( 'P2Mixi_MixiConnector.publishDiary():  ' . htmlspecialchars( $response ) );
-		// Get the post key from the response.
-		$postkey = $this->_getPostKey( $response );
-
-		// Access the post confirmation page.
-		$params['submit'] = 'confirm';
-		$params['post_key'] = $postkey;
-
-		if ( $images != null ) {
-			// Remove the image data from the parameter.
-			for ( $i = 1, $j = count( $images ); $i <= $j; $i++ ) {
-				unset( $params["photo$i"] );
-			}
-			// Get the 'packed' (image id) from the response.
-			$params['packed'] = $this->_getPacked( $response );
-
-		}
-		sleep(1);
-		
-		$response = $client->post( "http://mixi.jp/add_diary.pl", $params, false );
-		if ( $this->debug ) error_log( 'P2Mixi_MixiConnector.publishDiary():  ' . htmlspecialchars( $response ) );
-
-		error_log( '[Message] P2Mixi_MixiConnector.publishDiary(): The diary has been successfully published to mixi!' );
-
-	}
-
-	function _getId ( $string = "" ) {
-		$id = "";
-		if ( preg_match ( "/add_diary.pl\?id=([0-9]+)/", $string, $regs ) ) {
-			$id = $regs[1];
-			if ( $this->debug ) error_log( "P2Mixi_MixiConnector._getId(): ID found : $id " );
-		}
-		return $id;
-	}
-	/**
-	 * Looks for the value for the 'post_key' in hidden form parameter
-	 * from the given html.
-	 *
-	 * @param unknown_type $html
-	 * @return unknown
-	 */
-	function _getPostKey ( $html = "" ) {
-		$id = "";
-		if ( preg_match ( "/name=\"post_key\"\\s+value=\"([^\"]+)\"/", $html, $regs ) ) {
-			$id = $regs[1];
-			if ( $this->debug ) error_log( "P2Mixi_MixiConnector._getPostKey(): Post key found : $id " );
-		}
-		return $id;
-	}
-
-	/**
-	 * Looks for the value for the 'packed' in hidden form parameter
-	 * from the given html.
-	 *
-	 * @param string $html
-	 * @return unknown
-	 */
-	function _getPacked ( $html = "" ) {
-		$id = "";
-		if ( preg_match ( "/name=\"packed\"\\s+value=\"([^\"]+)\"/", $html, $regs ) ) {
-			$id = $regs[1];
-			if ( $this->debug ) error_log( "P2Mixi_MixiConnector._getPacked(): packed found : $id " );
-		}
-		return $id;
-	}
-
-	/**
-	 * Replaces utf-8 special chars to the numeric character references. 
-	 * TODO: This function should be located in an appropriate location.
-	 * 
-	 * @param string $html
-	 * @return html string
-	 */
-	function _escapeSpecialChars( $html = "" )
-	{
-		// music notes
-		$html = str_replace("\xE2\x99\xAB", "&#9835;", $html);
-		// TODO: should have more...
-		
-		return $html;
-	}
 }
 
 /**
@@ -464,9 +336,11 @@ class P2Mixi_TinyHttpClient {
 	var $debug = false;
 
 	// Default request headers.
-	var $defaultHeaders = array();
+	var $requestHeaders = array();
 	var $mimeBoundary = "---------------------------111111111111111111111111111";
 
+	var $responseHeaders = null;
+	
 	/**
 	 * constructor
 	 */
@@ -475,11 +349,25 @@ class P2Mixi_TinyHttpClient {
 		$this->port = $port;
 
 		# Init default http request headers.
-		$this->defaultHeaders["Host"] = $this->host;
-		$this->defaultHeaders["Accept"] = '*/*';
-		$this->defaultHeaders["Connection"] = "Close";
+		$this->requestHeaders["Host"] = $this->host;
+		$this->requestHeaders["Accept"] = '*/*';
+		$this->requestHeaders["Connection"] = "Close";
 	}
 
+	
+	function setDebugMode ( $debug )
+	{
+		$this->debug = $debug;
+	}
+	
+	function addRequestHeader ( $name, $value ) {
+		$this->requestHeaders[$name] = $value;
+	}
+	
+	function getResponseHeaders () {
+		return $this->responseHeaders;
+	}
+	
 	/**
 	 * Run GET http request.
 	 */
@@ -492,7 +380,7 @@ class P2Mixi_TinyHttpClient {
 			if ( !$fp ) {
 				error_log( "P2Mixi_TinyHttpClient.get(): fsockopen failed: $errstr ( $errno )" );
 			} else {
-				$headers = $this->defaultHeaders;
+				$headers = $this->requestHeaders;
 				if ( count( $this->cookies ) > 0 ) {
 					$headers['Cookie'] = $this->_constructCookieString();
 				}
@@ -508,7 +396,7 @@ class P2Mixi_TinyHttpClient {
 				}
 				fclose( $fp );
 			}
-			$this->_parseCookies( $res );
+			$this->_parseResponseHeaders( $res );
 		}
 		// cut off the response headers
 		$res = substr( $res, strpos( $res, "\r\n\r\n" ) + 4 );
@@ -518,31 +406,19 @@ class P2Mixi_TinyHttpClient {
 	/**
 	 * Run POST http request.
 	 */
-	function post ( $url = "", $params = null, $isMime = false ) {
+	function post ( $url = "", $body = "" ) {
 		$res = "";
-
 		if ( $url == "" ) {
 			error_log( 'P2Mixi_TinyHttpClient.post(): $url is empty.' );
-		} elseif ( $params == null ) {
-			error_log( 'P2Mixi_TinyHttpClient.post(): $params is empty.' );
+		} elseif ( $body == null ) {
+			error_log( 'P2Mixi_TinyHttpClient.post(): $body is empty.' );
 		} else {
 			$fp = fsockopen( $this->host, $this->port, $errno, $errstr, 30 );
 			if ( !$fp ) {
 				error_log( "P2Mixi_TinyHttpClient.post(): fsockopen failed: $errstr ( $errno )" );
 			} else {
-
-				$headers = $this->defaultHeaders;
-
-				$postdata = null;
-
-				if ( $isMime == false ) {
-					$headers['Content-Type'] = 'application/x-www-form-urlencoded';
-					$postdata = $this->_constructPostData( $params );
-				} else {
-					$headers['Content-Type'] = 'multipart/form-data; boundary=' . $this->mimeBoundary;
-					$postdata = $this->_constructMimeData( $params );
-				}
-				$headers['Content-Length'] = strlen( $postdata );
+				$headers = $this->requestHeaders;
+				$headers['Content-Length'] = strlen( $body );
 
 				if ( count( $this->cookies ) > 0 ) {
 					$headers['Cookie'] = $this->_constructCookieString();
@@ -551,8 +427,7 @@ class P2Mixi_TinyHttpClient {
 				$out = "POST $url HTTP/1.1\r\n";
 				$out .= $this->_constructHeaderString( $headers );
 				$out .= "\r\n";
-				$out .= $postdata;
-				//        $out .= "\r\n";
+				$out .= $body;
 				fwrite( $fp, $out );
 				if ( $this->debug ) error_log( "P2Mixi_TinyHttpClient.post():  $out " );
 
@@ -562,35 +437,56 @@ class P2Mixi_TinyHttpClient {
 				fclose( $fp );
 			}
 		}
-		$this->_parseCookies( $res );
+		$this->_parseResponseHeaders( $res );
 		// cut off the response headers
 		$res = substr( $res, strpos( $res, "\r\n\r\n" ) + 4 );
 		return $res;
 	}
+	
+	
+	/**
+	 * Parse http response header
+	 */
+	function _parseResponseHeaders ( $res ) {
+		if ( $res == '' ) return;
+		// Init response header array
+		$this->responseHeaders = array();
+		
+		$res = substr( $res, 0, strpos( $res, "\r\n\r\n" ) );
+		if ( $this->debug ) error_log( "P2Mixi_TinyHttpClient._parseResponseHeaders(): Response header: ".$res );
+		
+		$lines = explode( "\r\n", $res );
+		if ( $this->debug ) error_log( "P2Mixi_TinyHttpClient._parseResponseHeaders(): count(lines) ".count( $lines ) );
+		$index = -1;
+		foreach ( $lines as $line ) {
+			$param = explode( ":", $line, 2 );
+			if ( $this->debug ) error_log( "P2Mixi_TinyHttpClient._parseResponseHeaders(): $param[0] = $param[1]" );
+			$this->responseHeaders[trim( $param[0] )] = trim( $param[1] );			
+			
+			if ( preg_match ( "/^Set-Cookie/i", $line ) ) {
+				if ( $this->debug ) error_log( "P2Mixi_TinyHttpClient._parseResponseHeaders(): cookie found :  $line " );
+				$this->_parseCookie($line);
+			}		
+		}
+	}
+	
 	/**
 	 * Parse the cookies from the http response
 	 */
-	function _parseCookies ( $res ) {
-		if ( $res == '' ) return;
-
-		// cut off the response body
-		$res = substr( $res, 0, strpos( $res, "\r\n\r\n" ) );
-		if ( $this->debug ) error_log( "P2Mixi_TinyHttpClient._parseCookies(): Response header: ".$res );
-
-		$lines = explode( "\r\n", $res );
-		if ( $this->debug ) error_log( "P2Mixi_TinyHttpClient._parseCookies(): count(lines) ".count( $lines ) );
-		$index = -1;
-		foreach ( $lines as $line ) {
-			if ( preg_match ( "/^Set-Cookie/i", $line ) ) {
-				if ( $this->debug ) error_log( "P2Mixi_TinyHttpClient._parseCookies(): cookie found :  $line " );
-				$params = explode( ";", $line );
-				$cookie = explode ( ":", $params[0] );
-				$cookie = explode ( "=", $cookie[1] );
-				if ( $this->debug ) error_log( "P2Mixi_TinyHttpClient._parseCookies(): $cookie[0] = $cookie[1]" );
-				$this->cookies[trim( $cookie[0] )] = trim( $cookie[1] );
-			} else {
-				if ( $this->debug ) error_log( "P2Mixi_TinyHttpClient._parseCookies(): cookie not found in this line" );
-			}
+	function _parseCookie ( $line ) {
+		// Sample set-cookie line is like following.
+		// Set-Cookie: name=value; path=/; expires=Wednesday, 09-Nov-99 23:12:40 GMT
+		
+		// Get the "Set-Cookie: name=value" part
+		$cookie = explode( ";", $line );
+		// Take off "Set-Cookie:" 
+		$cookie = explode ( ":", $cookie[0] );
+		// Split name and value.
+		$cookie = explode ( "=", $cookie[1] );
+		if ( count( $cookie ) == 2 )
+		{
+			if ( $this->debug ) error_log( "P2Mixi_TinyHttpClient._parseCookie(): $cookie[0] = $cookie[1]" );
+			$this->cookies[trim( $cookie[0] )] = trim( $cookie[1] );
 		}
 	}
 
