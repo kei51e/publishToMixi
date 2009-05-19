@@ -227,15 +227,15 @@ class P2M_MixiConnector {
 		// make it 2 line breaks.
 		$content = preg_replace( "/(\\r\\n){3,}/", "\r\n\r\n", $content );
 		// escape unicode special chars to html numeric character references.
-		$content = $this->_replaceSpecialChars( $content );
-		$title = $this->_replaceSpecialChars( $title );		
+		$content = $this->_escapeSpecialChars( $content );
+		$title = $this->_escapeSpecialChars( $title );		
 		// Convert the encoding from utf-8 to euc-jp.
 		// Mixi is based on euc-jp encoding.
 		// Use mb_convert_encoding if available, if not, use iconv.
 		if ( function_exists( 'mb_convert_encoding' ) ) {
 			error_log( '[Message]　P2M_MixiConnector.publishDiary(): Using mb_convert_encoding() for conversion.' );
-			$title = mb_convert_encoding( "utf-8", "euc-jp", $title );
-			$content = mb_convert_encoding( "utf-8", "euc-jp", $content );
+			$title = mb_convert_encoding( $title, "euc-jp", "utf-8" );
+			$content = mb_convert_encoding( $content, "euc-jp", "utf-8" );
 		} else {
 			error_log( '[Message]　P2M_MixiConnector.publishDiary(): Using iconv() for conversion.' );
 			$title = iconv( "utf-8", "euc-jp", $title );
