@@ -4,7 +4,7 @@
  Plugin URI: http://ksnn.com/diary/?page_id=2437
  Description: Publish the post to Mixi using AtomPub
  Author: Kei Saito
- Version: 2.0
+ Version: 2.1
  Author URI: http://ksnn.com/
  */
 
@@ -94,17 +94,39 @@ function P2Mixi_renderOptionContent () {
  * @return postId
  */
 function P2Mixi_publishHandler ( $postId ) {
-	global $P2Mixi_username, $P2Mixi_password, $P2Mixi_id;
+	global $P2Mixi_username, $P2Mixi_password, $P2Mixi_id, 
+		$P2Mixi_default, $P2Mixi_headerDefault, $P2Mixi_footerDefault;
 
-	// verify this came from the our screen and with proper authorization,
-	// because publish_post can be triggered at other times
-	if ( !wp_verify_nonce( $_POST['P2Mixi_noncename'], plugin_basename(__FILE__) )) {
-		return $post_id;
-	}
 		
-	if ( $_POST['P2Mixi_publishcheckbox'] == null || $_POST['P2Mixi_publishcheckbox'] == 'false'  ) {
-		return $postId;
+	$header = "";
+	$footer = "";	
+		
+	// In case the entry was posted from the tool, not from the wp-admin page
+	// by checking any of text input field was there or not.
+	if ( $_POST['P2Mixi_footertext'] == null ) {
+		if ( $P2Mixi_default == false ) {
+			return $postId;
+		}
+		
+		$header = $P2Mixi_headerDefault;
+		$footer = $P2Mixi_footerDefault;
+				
+	} else {
+
+		// verify this came from the our screen and with proper authorization,
+		// because publish_post can be triggered at other times
+		if ( !wp_verify_nonce( $_POST['P2Mixi_noncename'], plugin_basename(__FILE__) )) {
+			return $post_id;
+		}
+		
+		// In case the entry was posted from the wp-admin page.
+		if ( $_POST['P2Mixi_publishcheckbox'] == null || $_POST['P2Mixi_publishcheckbox'] == 'false'  ) {
+			return $postId;
+		}
+		$header = trim( $_POST['P2Mixi_headertext'] );
+		$footer = trim( $_POST['P2Mixi_footertext'] );
 	}
+	
 	// Get the post detail from wordpress.
 	$post = get_post( $postId );
 	if ( $post->post_status != 'publish' ) {
@@ -115,7 +137,6 @@ function P2Mixi_publishHandler ( $postId ) {
 	$images = $extractor->extract( $post->post_content );
 
 	// Header text
-	$header = trim( $_POST['P2Mixi_headertext'] );
 	if ( $header != '' ) {
 		$header = str_replace( '%%URL%%', $post->guid, $header );
 		$header = $header . "\r\n\r\n";
@@ -132,7 +153,6 @@ function P2Mixi_publishHandler ( $postId ) {
 	$body = preg_replace('/<a\s*href\=\"([^\"]*)\"[^>]*>([^<]*)<\/a>/i', '${2}(${1})', $body);
 		
 	// Footer text	
-	$footer = trim( $_POST['P2Mixi_footertext'] );
 	if ( $footer != '' ) {
 		$footer = str_replace( '%%URL%%', $post->guid, $footer );
 		$footer = "\r\n\r\n" . $footer;
@@ -161,7 +181,14 @@ function P2Mixi_publishToMixi () {
 	}
 	
 	// WSSE Authentication
-	$nonce       = pack('H*', sha1(md5(time().rand().posix_getpid())));
+	$nonce       = ""; 
+	if ( function_exists( 'posix_getpid' ) ) {
+		$nonce   = pack('H*', sha1(md5(time().rand().posix_getpid())));
+	} else {
+		// Use uniqid() in case of windows.
+		$nonce   = pack('H*', sha1(md5(time().rand().uniqid())));
+	}
+	
 	$created     = date('Y-m-d\TH:i:s\Z');
 	$digest      = base64_encode(pack('H*', sha1($nonce . $created . $password)));
 	$wsse_text   = 'UsernameToken Username="%s", PasswordDigest="%s", Nonce="%s", Created="%s"';
