@@ -1,8 +1,10 @@
-Publish to Mixi version 1.2.1
+Publish to Mixi version 1.3
 README
 
-2008/11/18
+2008/12/17
 Kei Saito　(http://ksnn.com/)
+
+Publish To Mixi site URL : http://ksnn.com/diary/?page_id=2437
 
 
 Wordpressへの投稿をMixiの日記にも同時に自動的に投稿するプラグインです。
@@ -23,14 +25,21 @@ PHP4系では、オブジェクト指向の機能が無いので動作しない�
 PHP標準の機能だけで書いてあるので、別途必要なライブラリはありません。
 なお、Mixiプレミアムのアカウントでの動作は確認していません。
 [インストール方法]1. Zipファイルをダウンロードして解凍します2. publishToMixi.php というファイルをテキストエディタで開いて、
-　　$mixi_username と $mixi_password にそれぞれ
+　　$P2Mixi_username と $P2Mixi_password にそれぞれ
 　　自分の mixi のユーザ名をパスワードを設定します3. publishToMixi.php を wp-content/plugins フォルダにコピーします4. 管理画面からプラグインを有効にします
 [ライセンス]利用は無料です。ライセンスは GPL(http://www.gnu.org/licenses/)です。
 
-[開発環境]Mac OS X 10.5Apache 2.2.8PHP 5.2.5 (mod_php)Wordpress 2.5.1
+[開発環境]Mac OS X 10.5Apache 2.2.8PHP 5.2.5 (mod_php)Wordpress 2.5.1/2.7.0
+
+
+[変更履歴]
+
+[1.2から1.3への変更点]
+- Wordpress 2.7 対応 
+- defaultオプションをコードへ追加
+- encodingオプションをコードへ追加
 
 [1.2から1.2.1への変更点]
 - try-catchの削除 : PHPによっては動かない場合があるとレポートがあったため
 - mb_convert_encoding関数があったらiconvの代わりにこれを使用するように変更。
 - utf-8からeuc-jpへ変換できない文字のサポート
-
