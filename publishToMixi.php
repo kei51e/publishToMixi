@@ -1,10 +1,10 @@
 <?php
 /*
- Plugin Name: Publish to Mixi
+ Plugin Name: publishToMixi
  Plugin URI: http://ksnn.com/diary/?page_id=2437
  Description: Publish the post to Mixi.
  Author: Kei Saito
- Version: 1.3
+ Version: 1.4
  Author URI: http://ksnn.com/
  */
 
@@ -36,6 +36,13 @@ $P2Mixi_password = "your_password";
 // If this is true, Publish to Mixi checkbox is checked by default. 
 $P2Mixi_default = false;
 
+// Header default string.
+// '%%URL%%' will be replaced with the post permalink. 
+$P2Mixi_headerDefault = '';
+// Footer default string.
+// '%%URL%%' will be replaced with the post permalink. 
+$P2Mixi_footerDefault = '';
+
 // Your WordPress encoding. In most of cases, it is 'utf-8'.
 // Modify it if you use the other encoding for your wordpress.
 $P2Mixi_wordpressEncoding = 'utf-8';
@@ -43,7 +50,7 @@ $P2Mixi_wordpressEncoding = 'utf-8';
 // Don't modify this.
 $P2Mixi_mixiEncoding = 'euc-jp';
 
-// DO NOT EDIT LINES BELOW
+
 // ----------------------------------------------------------------------------
 
 
@@ -59,12 +66,29 @@ function P2Mixi_renderOption () {
  * Renders the option box content. This will be called by P2Mixi_renderOption().
  */
 function P2Mixi_renderOptionContent () {
-	global $P2Mixi_default;
+	global $P2Mixi_default, $P2Mixi_headerDefault, $P2Mixi_footerDefault;
 
 	?>
+	
 	<input type="hidden" name="P2Mixi_noncename" id="P2Mixi_noncename" value="<?php echo wp_create_nonce( plugin_basename(__FILE__) ) ?>" />
-	<input type="checkbox" name="P2Mixi_publishcheckbox" id="P2Mixi_publishcheckbox" <?php if ( $P2Mixi_default == true ) { echo "checked"; } ?> />
-	<label for="P2Mixi_publishbox"> <?php echo __("Publish To Mixi", 'P2Mixi_textdomain' ) ?> </label>
+	<div>
+		<input type="checkbox" name="P2Mixi_publishcheckbox" id="P2Mixi_publishcheckbox" <?php if ( $P2Mixi_default == true ) { echo 'checked="checked"'; } ?> />
+		<label for="P2Mixi_publishbox"> <?php echo __("Publish To Mixi", 'P2Mixi_textdomain' ) ?> </label>
+	</div>
+
+	<div style="margin-top:6px">
+		<label for="P2Mixi_headertext"> <?php echo __("Header Text", 'P2Mixi_textdomain' ) ?> </label>
+	</div>
+	<div>
+		<textarea style="width:98%" name="P2Mixi_headertext" id="P2Mixi_headertext"><?php  echo $P2Mixi_headerDefault; ?></textarea>
+	</div>
+	<div style="margin-top:6px">
+		<label for="P2Mixi_footertext"> <?php echo __("Footer Text", 'P2Mixi_textdomain' ) ?> </label>
+	</div>
+	<div>
+		<textarea style="width:98%" name="P2Mixi_footertext" id="P2Mixi_footertext"><?php  echo $P2Mixi_footerDefault; ?></textarea>
+	</div>
+	
 	<?php 
 }
 
@@ -95,11 +119,28 @@ function P2Mixi_publishHandler ( $postId ) {
 	$extractor = new P2Mixi_JpegExtractor();
 	$images = $extractor->extract( $post->post_content );
 
+	// Header text
+	$header = trim( $_POST['P2Mixi_headertext'] );
+	if ( $header != '' )
+	{
+		$header = str_replace( '%%URL%%', $post->guid, $header );
+		$header = $header . "\r\n\r\n";
+	}
+		
+	// Footer text	
+	$footer = trim( $_POST['P2Mixi_footertext'] );
+	if ( $footer != '' )
+	{
+		$footer = str_replace( '%%URL%%', $post->guid, $footer );
+		$footer = "\r\n\r\n" . $footer;
+	}
+	// content = header + content + footer	
+	$content = $header . $post->post_content . $footer;
 	// Create P2Mixi_MixiConnector instance.
 	$connector = new P2Mixi_MixiConnector ( $P2Mixi_username, $P2Mixi_password );
 	// Publish the entry to mixi.
-	$connector->publishDiary( $post->post_title, $post->post_content, $images, $P2Mixi_wordpressEncoding, $P2Mixi_mixiEncoding );
-
+	$connector->publishDiary( $post->post_title, $content, $images, $P2Mixi_wordpressEncoding, $P2Mixi_mixiEncoding );
+	
 	return $postId;
 }
 
