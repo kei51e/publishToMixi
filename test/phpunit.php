@@ -1,3 +1,12 @@
+/*
+ * phpunit.php
+ * Originally written by Vincent Oostindie
+ * Taken from bitweaver source tree:
+ * http://bitweaver.cvs.sourceforge.net/viewvc/bitweaver/_bit_kernel/test/index.php?revision=1.1.1.1&view=markup
+ * Modified by ento
+ * Original README can be found in index.php
+ */
+
 <?php
 if (!defined('PHP_UNIT_INCLUDED')) 
 {
@@ -250,7 +259,7 @@ class TestRunner
 			exit -1;
 			break;
 		default:
-			$this->writer->onTestUnknwonError($errno, $errstr, $errfile, $errline);
+			$this->writer->onTestUnknownError($errno, $errstr, $errfile, $errline);
 			$args[] = "Unknown Error";
 			break;
 		}
