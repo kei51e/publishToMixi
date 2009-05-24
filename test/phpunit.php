@@ -38,7 +38,7 @@ class Assert
 		{
 			if ($message == '') 
 			{
-				$message = "Assertion failed: <b>'$value1' != '$value2'</b>";
+				$message = "Assertion failed: '$value1' != '$value2'";
 			}
 			trigger_error($message, E_USER_WARNING);
 		}

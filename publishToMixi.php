@@ -215,20 +215,6 @@ function P2Mixi_publishHandler ( $postId ) {
 
 	// Body text
 	$body = $post->post_content;
-	// Extract the URL info from <a> tags in the post content
-	// to keep the link information since all HTML tags will be stripped by mixi.
-	// For example, The following string '<a href="http://mixi.jp">mixi</a>'
-	// will be replaced like 'mixi (http://mixi.jp)'.  
-	// TODO: It should be able to handle more complex links.  
-	// The logic can handle only simple <a> tags now.
-	$body = preg_replace_callback(
-		'/<a\s*href\=\"([^\"]*)\"[^>]*>([^<]*)<\/a>/i',
-		create_function(
-			'$m',
-			'return $m[1] == $m[2] ? $m[1] : "$m[2]($m[1])";'
-		),
-		$body);
-		
 	// Footer text	
 	if ( $footer != '' ) {
 		$footer = str_replace( '%%URL%%', $post->guid, $footer );
@@ -236,10 +222,11 @@ function P2Mixi_publishHandler ( $postId ) {
 	}
 	// content = header + body + footer	
 	$content = $header . $body . $footer;
-	// strip html thingy
-	$content = sanitize_content( $content );
+	// clean things up
+	$content = replace_hyperlinks( $content, array( $images['urls'][0] ) );
+	$content = sanitize_html( $content );
 	// Publish to Mixi
-	P2Mixi_publishToMixi( $P2Mixi_username, $P2Mixi_password, $P2Mixi_id, $post->post_title, $content, $images );
+	P2Mixi_publishToMixi( $P2Mixi_username, $P2Mixi_password, $P2Mixi_id, $post->post_title, $content, $images['images'] );
 	return $postId;
 }
 
@@ -287,7 +274,7 @@ function P2Mixi_publishToMixi () {
 		if ( $P2Mixi_debug ) error_log ( "P2Mixi_publishToMixi(): Uploading images to Mixi." );
 		$client->addRequestHeader('X-WSSE', $wsse_header);
 		$client->addRequestHeader('Content-Type', 'image/jpeg');
-		$client->post( $url, $images[0] );		
+		$client->post( $url, $images[0] );
 		$headers  = $client->getResponseHeaders();
 		$location = $headers['Location'];
 		if ( $P2Mixi_debug ) error_log ( "P2Mixi_publishToMixi(): Finished uploading images to Mixi." );
@@ -303,7 +290,7 @@ function P2Mixi_publishToMixi () {
 	// Post Text
 	//------------------------------------------------------------
 	$body = "<?xml version='1.0' encoding='utf-8'?>"
-    . "<entry xmlns='http://www.w3.org/2007/app'>"
+	. "<entry xmlns='http://www.w3.org/2007/app'>"
 	. "<title>$title</title>"
 	. "<summary>$content</summary>"
 	. "</entry>";
@@ -315,6 +302,7 @@ function P2Mixi_publishToMixi () {
 	if ( $P2Mixi_debug ) error_log ( "P2Mixi_publishToMixi(): Finished uploading text to Mixi." );	
 }
 
+// ----------------------------------------------------------------------------
 // Register actions to wordpress.
 if ( function_exists( 'add_action' ) ) {
 	add_action( 'admin_init', 'P2Mixi_adminInit' );
@@ -326,12 +314,57 @@ if ( function_exists( 'register_activation_hook' ) ) {
 	register_activation_hook( __FILE__, 'P2Mixi_activate' );
 }
 
+// ----------------------------------------------------------------------------
+/**
+ * Extract the URL info from <a> tags and <img> tags in the post content
+ * to keep the link information since all HTML tags will be stripped before submitting to mixi.
+ * For example, The following string '<a href="http://mixi.jp">mixi</a>'
+ * will be replaced like 'mixi (http://mixi.jp)'.  
+ * TODO: It should be able to handle more complex links.  
+ * The logic can handle only simple <a> tags now.
+ */
+function replace_hyperlinks_callback_a ( $m ) {
+	return $m[1] == $m[2] ? $m[1] : "$m[2]($m[1])";
+}
+
+function replace_hyperlinks_callback_img ( $m ) {
+	return $m[1];
+}
+
+function replace_hyperlinks ( $text, $excludes = array() ) {
+	if ( $excludes == NULL ) $excludes = array();
+	// It's better to check if the URL is in $excludes here
+	// but I couldn't find a way to refer to the $excludes variable
+	// from inside this callback.
+	// Hence the cleanup code afterwards.
+	$text = preg_replace_callback(
+		'/<a\s*href\=\"([^\"]*)\"[^>]*>([^<]*)<\/a>/i',
+		'replace_hyperlinks_callback_a',
+		$text);
+
+	// Do the same thing with <img> tags
+	$text = preg_replace_callback(
+		'/<img\s*src\=\"([^\"]*)\"[^>]*\/>/i',
+		'replace_hyperlinks_callback_img',
+		$text);
+	// Remove $excludes
+	foreach ( $excludes as $url ) {
+		$url_re = str_replace( '/', '\/', $url );
+		$url_re = str_replace( '?', '\?', $url_re );
+		$text = preg_replace(
+			"/(\($url_re\)|$url_re)/i",
+			'',
+			$text);
+	}
+	return $text;
+}
+
 /**
  * Sanitize body text
  * - Strip html tags
- * - Decode html entities
+ * - Encode any special HTML characters to properly handle html entities
  */
-function sanitize_content ( $text ) {
+function sanitize_html ( $text ) {
 	$ret = $text;
 	$ret = preg_replace(
 		array(
@@ -353,7 +386,7 @@ function sanitize_content ( $text ) {
 			'@</?((form)|(button)|(fieldset)|(legend)|(input))@iu',
 			'@</?((label)|(select)|(optgroup)|(option)|(textarea))@iu',
 			'@</?((frameset)|(frame)|(iframe))@iu',
-		// convert br to crlf
+		// convert br to line break
 			'@<br */?>@i',
 		),
 		array(
@@ -369,6 +402,7 @@ function sanitize_content ( $text ) {
 	return $ret;
 }
 
+// ----------------------------------------------------------------------------
 /**
  * Jpeg Extractor
  *
@@ -397,11 +431,13 @@ class P2Mixi_JpegExtractor {
 	 * Extracts jpeg image data from the IMG tags in the given HTML.
 	 *
 	 * @param string $html
+	 * @return array array( 'urls' => array of urls, 'images' => array of image data )
 	 */
 	function extract ( $html )	{
 		$urls = $this->_extractUrls( $html );
 		$cnt = 0;
 		$images = array();
+		$imageUrls = array();
 
 		for ($i=0, $j=count ( $urls ); $i<$j; $i++ )	{
 			$image = $this->_getData( $urls[$i] );
@@ -409,13 +445,14 @@ class P2Mixi_JpegExtractor {
 			if ( $this->_isJpeg( $image ) == true )	{
 				if ( $this->debug ) error_log ( "P2Mixi_JpegExtractor.extract(): It is jpeg data." );
 				array_push( $images, $image );
+				array_push( $imageUrls, $urls[$i] );
 				$cnt++;
 				if ( $cnt == $this->maxNumOfImages ) {	
 					break;
 				}
 			}
 		}
-		return $images;
+		return array( 'urls' => $imageUrls, 'images' => $images );
 	}
 
 	/**
@@ -471,6 +508,7 @@ class P2Mixi_JpegExtractor {
 	}
 }
 
+// ----------------------------------------------------------------------------
 /**
  * Http socket class who knows how to send and receive http headers and body.
 
