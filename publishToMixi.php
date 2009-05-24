@@ -324,29 +324,31 @@ if ( function_exists( 'register_activation_hook' ) ) {
  * The logic can handle only simple <a> tags now.
  */
 function replace_hyperlinks_callback_a ( $m ) {
-	return $m[1] == $m[2] ? $m[1] : "$m[2]($m[1])";
-}
-
-function replace_hyperlinks_callback_img ( $m ) {
-	return $m[1];
-}
-
-function replace_hyperlinks ( $text, $excludes = array() ) {
-	if ( $excludes == NULL ) $excludes = array();
 	// It's better to check if the URL is in $excludes here
 	// but I couldn't find a way to refer to the $excludes variable
 	// from inside this callback.
 	// Hence the cleanup code afterwards.
+	return $m[2] == $m[3] ? $m[2] : "$m[3]($m[2])";
+}
+
+function replace_hyperlinks_callback_img ( $m ) {
+	return $m[2];
+}
+
+function replace_hyperlinks ( $text, $excludes = array() ) {
+	if ( $excludes == NULL ) $excludes = array();
+	// First process <img> tags to process nested cases properly
+	// i.e. <a><img/></a>
 	$text = preg_replace_callback(
-		'/<a\s*href\=\"([^\"]*)\"[^>]*>([^<]*)<\/a>/i',
+		'/<img\s*src\=(\"|\')([^\"\']*)\1[^\/]*\/?>/i',
+		'replace_hyperlinks_callback_img',
+		$text);
+	// Now the <a> tags
+	$text = preg_replace_callback(
+		'/<a\s*href\=(\"|\')([^\"\']*)\1[^>]*>([^<]*)<\/a>/i',
 		'replace_hyperlinks_callback_a',
 		$text);
 
-	// Do the same thing with <img> tags
-	$text = preg_replace_callback(
-		'/<img\s*src\=\"([^\"]*)\"[^>]*\/>/i',
-		'replace_hyperlinks_callback_img',
-		$text);
 	// Remove $excludes
 	foreach ( $excludes as $url ) {
 		$url_re = str_replace( '/', '\/', $url );
