@@ -206,26 +206,41 @@ function p2mixi_publish_handler ( $postId ) {
 	// Extracting images from the post content.
 	$images = p2mixi_extract_jpeg_images( $post->post_content );
 	
-	// Header text
+	// Header
 	if ( $header != '' ) {
 		$header = str_replace( '%%URL%%', $post->guid, $header );
-		$header = $header . "\r\n\r\n";
+		$header = p2mixi_sanitize_html ( $header . "\r\n\r\n" );		
 	}
 
-	// Body text
+	// Body
 	$body = $post->post_content;
-	// Footer text	
+	$body = p2mixi_replace_hyperlinks( $body, array( $images['urls'][0] ) );
+	$body = p2mixi_sanitize_html( $body );
+
+	// Footer	
 	if ( $footer != '' ) {
 		$footer = str_replace( '%%URL%%', $post->guid, $footer );
-		$footer = "\r\n\r\n" . $footer;
+		$footer = p2mixi_sanitize_html( "\r\n\r\n" . $footer );
 	}
+	
+	// Chop the body if it is too big.
+	// The max length for the mixi diary body is 10k letters.
+	// Actually it is 10k 'Japanese' letters (20k bytes) so it could be more 
+	// if you use ASCII letters, but here just say 10k letters to make it safer.
+	//
+	// Not sure mb_ functions are available in any php env or not.
+	if ( function_exists( 'mb_strlen' ) && function_exists( 'mb_substr' ) ) {
+		$max_body_len = 10000 - mb_strlen( $header, 'utf-8' ) - mb_strlen ( $footer, 'utf-8' );
+		if ( $max_body_len < mb_strlen( $body )) {
+			$body = mb_substr( $body, 0, $max_body_len, 'utf-8' );
+		}
+	}
+	
 	// content = header + body + footer	
 	$content = $header . $body . $footer;
-	// clean things up
-	$content = p2mixi_replace_hyperlinks( $content, array( $images['urls'][0] ) );
-	$content = p2mixi_sanitize_html( $content );
+
 	// Publish to Mixi
-	p2mixi_publish_to_mixi( $p2mixi_username, $p2mixi_password, $p2mixi_id, $post->post_title, $content, $images );
+	p2mixi_publish_to_mixi( $p2mixi_username, $p2mixi_password, $p2mixi_id, $post->post_title, $content, $images['images'] );
 	return $postId;
 }
 
@@ -408,6 +423,7 @@ function p2mixi_extract_jpeg_images ( $html, $max = 1 ) {
 	global $p2mixi_debug;
 	$cnt = 0;
 	$images = array();
+	$urls = array();
 	
 	// Matching all img tags
 	preg_match_all( "/(<img[^>]*>)/i", $html, $matches, PREG_SET_ORDER );
@@ -422,7 +438,6 @@ function p2mixi_extract_jpeg_images ( $html, $max = 1 ) {
 		$client->setDebugMode( $p2mixi_debug );
 		$client->requestHeaders["Connection"] = "Keep-Alive";
 		$contents = $client->get( $url[1] );
-
 		
 		// Checking the data is really the jpeg data or not
 		// by checking 'JFIF' string inside. 
@@ -434,12 +449,13 @@ function p2mixi_extract_jpeg_images ( $html, $max = 1 ) {
 		// Ideally, the logic should understand the exif structures.
 		if ( strpos( $contents, 'JFIF' ) != false ) {
 			array_push( $images, $contents );
+			array_push( $urls, $url[1] );
 			if ( ++$cnt == $max ) {	
 				break;
 			}
 		}
 	}
-	return $images;	
+	return array( 'urls' => $urls, 'images' => $images );
 }
 
 
