@@ -1,3 +1,4 @@
+<?php
 /*
  * phpunit.php
  * Originally written by Vincent Oostindie
@@ -7,7 +8,6 @@
  * Original README can be found in index.php
  */
 
-<?php
 if (!defined('PHP_UNIT_INCLUDED')) 
 {
 

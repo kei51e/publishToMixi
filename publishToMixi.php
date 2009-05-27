@@ -478,6 +478,7 @@ class p2mixi_TinyHttpSocket {
 	var $host;
 	var $port;
 	var $getlen = 1024;
+	var $timeout = 30;
 	var $debug = false;
 
 	var $request;
@@ -499,7 +500,7 @@ class p2mixi_TinyHttpSocket {
 		if ( $this->fp ) {
 			return true;
 		}
-		$this->fp = fsockopen( $this->host, $this->port, $errno, $errstr, 30 );
+		$this->fp = @fsockopen( $this->host, $this->port, $errno, $errstr, $this->timeout );
 		if ( !$this->fp ) {
 			return false;
 		}
@@ -759,7 +760,7 @@ class p2mixi_TinyHttpClient {
 			$path .= '#' . $comps['fragment'];
 		}
 		$host = $comps['host'];
-		$port = ( $comps['port'] == false ) ? 80 : $comps['port'];
+		$port = ( !isset( $comps['port'] ) || $comps['port'] == false ) ? 80 : $comps['port'];
 		$trail = $path;
 		return $comps;
 	}

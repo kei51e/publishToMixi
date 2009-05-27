@@ -7,6 +7,7 @@ class TestTinyHttpSocket extends Test {
 		Assert::equalsFalse( $sock->connect() );
 
 		$sock = new P2Mixi_TinyHttpSocket( "www.example.com", 1 );
+		$sock->timeout = 3;
 		Assert::equalsFalse( $sock->connect() );
 	}
 }
