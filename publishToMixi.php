@@ -6,6 +6,7 @@
  Author: Kei Saito
  Version: 2.1
  Author URI: http://ksnn.com/
+ Contributors: ento
  */
 
 /*
