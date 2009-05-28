@@ -229,7 +229,7 @@ function p2mixi_publish_handler ( $postId ) {
 	// Actually it is 10k 'Japanese' letters (20k bytes) so it could be more 
 	// if you use ASCII letters, but here just say 10k letters to make it safer.
 	//
-	// Not sure mb_ functions are available in any php env or not.
+	// Not sure mb_ functions are available in any php env.
 	if ( function_exists( 'mb_strlen' ) && function_exists( 'mb_substr' ) ) {
 		$max_body_len = 10000 - mb_strlen( $header, 'utf-8' ) - mb_strlen ( $footer, 'utf-8' );
 		if ( $max_body_len < mb_strlen( $body )) {
@@ -257,16 +257,16 @@ function p2mixi_publish_to_mixi () {
 	$content  = $args[4];
 	if ( func_num_args() == 6 )
 	{
-		$images   = $args[5];
+		$images = $args[5];
 	}
 	
 	// WSSE Authentication
-	$nonce       = ""; 
+	$nonce = ""; 
 	if ( function_exists( 'posix_getpid' ) ) {
-		$nonce   = pack('H*', sha1(md5(time().rand().posix_getpid())));
+		$nonce = pack('H*', sha1(md5(time().rand().posix_getpid())));
 	} else {
 		// Use uniqid() in case of windows.
-		$nonce   = pack('H*', sha1(md5(time().rand().uniqid())));
+		$nonce = pack('H*', sha1(md5(time().rand().uniqid())));
 	}
 	
 	$created     = date('Y-m-d\TH:i:s\Z');
@@ -276,23 +276,27 @@ function p2mixi_publish_to_mixi () {
 	
 	// mixi POST URL
 	$url = 'http://mixi.jp/atom/diary/member_id=' . $id;
-	$client = new p2mixi_TinyHttpClient();
-	$client->setDebugMode($p2mixi_debug);
+	$request_headers = array();
+	$request_headers['X-WSSE'] = $wsse_header;
+	$request_headers['Accept'] = '*/*';
+	$request_headers["Connection"] = "Close";
 	
 	//------------------------------------------------------------
 	// Post Image
 	//------------------------------------------------------------
-	if ( $p2mixi_debug ) error_log ( "p2mixi_publish_to_mixi(): # of images : " . sizeof( $images ) );
+	if ( $p2mixi_debug ) error_log ( "p2mixi_publish_to_mixi: # of images : " . sizeof( $images ) );
 	if ( sizeof( $images ) > 0 )
 	{
-		if ( $p2mixi_debug ) error_log ( "p2mixi_publish_to_mixi(): Uploading images to Mixi." );
-		$client->addRequestHeader('X-WSSE', $wsse_header);
-		$client->addRequestHeader('Content-Type', 'image/jpeg');
-		$client->post( $url, $images[0] );
-		$headers  = $client->getResponseHeaders();
-		$location = $headers['Location'];
-		if ( $p2mixi_debug ) error_log ( "p2mixi_publish_to_mixi(): Finished uploading images to Mixi." );
-		if ( $p2mixi_debug ) error_log ( "p2mixi_publish_to_mixi(): location: $location" );
+		if ( $p2mixi_debug ) error_log ( "p2mixi_publish_to_mixi: Uploading images to Mixi." );
+
+		$response_headers = array();
+		$response_body = '';
+		$request_headers['Content-Type'] = 'image/jpeg';
+		p2mixi_http_post( $url, $request_headers, $images[0], $response_headers, $response_body );
+
+		$location = $response_headers['Location'];
+		if ( $p2mixi_debug ) error_log ( "p2mixi_publish_to_mixi: Finished uploading images to Mixi." );
+		if ( $p2mixi_debug ) error_log ( "p2mixi_publish_to_mixi: Location: $location" );
 		
 		if ( $location != '' )
 		{
@@ -303,17 +307,16 @@ function p2mixi_publish_to_mixi () {
 	//------------------------------------------------------------
 	// Post Text
 	//------------------------------------------------------------
-	$body = "<?xml version='1.0' encoding='utf-8'?>"
+	$request_body = "<?xml version='1.0' encoding='utf-8'?>"
 	. "<entry xmlns='http://www.w3.org/2007/app'>"
 	. "<title>$title</title>"
 	. "<summary>$content</summary>"
 	. "</entry>";
-	
-	$client->addRequestHeader('X-WSSE', $wsse_header);
-	$client->addRequestHeader('Content-Type', 'application/atom+xml');
-	if ( $p2mixi_debug ) error_log ( "p2mixi_publish_to_mixi(): Uploading text to Mixi." );
-	$client->post( $url, $body );
-	if ( $p2mixi_debug ) error_log ( "p2mixi_publish_to_mixi(): Finished uploading text to Mixi." );	
+	$request_headers['Content-Type'] = 'application/atom+xml';
+
+	if ( $p2mixi_debug ) error_log ( "p2mixi_publish_to_mixi: Uploading text to Mixi." );
+	p2mixi_http_post( $url, $request_headers, $request_body, $response_headers, $response_body );
+	if ( $p2mixi_debug ) error_log ( "p2mixi_publish_to_mixi: Finished uploading text to Mixi." );	
 }
 
 // ----------------------------------------------------------------------------
@@ -434,11 +437,12 @@ function p2mixi_extract_jpeg_images ( $html, $max = 1 ) {
 		// Download the image from the url
 		preg_match( "/src=\"([^\"]+)\"/i", $matches[$i][1], $url );
 		if ( $p2mixi_debug ) error_log ( "p2mixi_extract_jpeg_images: >>>$url[1]<<<" );
-
-		$client = new p2mixi_TinyHttpClient();
-		$client->setDebugMode( $p2mixi_debug );
-		$client->requestHeaders["Connection"] = "Keep-Alive";
-		$contents = $client->get( $url[1] );
+		
+		$request_headers['Accept'] = '*/*';
+		$request_headers["Connection"] = "Keep-Alive";
+		$response_headers = array();
+		$response_body = '';
+		p2mixi_http_get( $url[1], $request_headers, $response_headers, $response_body );
 		
 		// Checking the data is really the jpeg data or not
 		// by checking 'JFIF' string inside. 
@@ -448,8 +452,8 @@ function p2mixi_extract_jpeg_images ( $html, $max = 1 ) {
 		// of the data, but it does not if the image contains exif data
 		// because the exif headers comes before the JFIF appearance. 
 		// Ideally, the logic should understand the exif structures.
-		if ( strpos( $contents, 'JFIF' ) != false ) {
-			array_push( $images, $contents );
+		if ( strpos( $response_body, 'JFIF' ) != false ) {
+			array_push( $images, $response_body );
 			array_push( $urls, $url[1] );
 			if ( ++$cnt == $max ) {	
 				break;
@@ -459,6 +463,53 @@ function p2mixi_extract_jpeg_images ( $html, $max = 1 ) {
 	return array( 'urls' => $urls, 'images' => $images );
 }
 
+function p2mixi_http_get ( $url, $request_headers, &$response_headers, &$response_body, $retries = 0 ) {
+	global $p2mixi_debug;
+	$url_comps = parse_url( $url );
+	if ( $url_comps['port'] == false ) $url_comps['port'] = 80;
+	$sock = new p2mixi_TinyHttpSocket( $url_comps['host'], $url_comps['port'] );
+	$sock->setDebugMode( $p2mixi_debug );
+	if ( !$sock->connect() ) {
+		error_log( "p2mixi_http_get: fsockopen failed: $errstr ( $errno )" );
+	} else {
+		$request_headers["Host"] = $url_comps['host'];
+		$sock->send( "GET", $url, $request_headers );
+		$sock->recv( $response_headers, $response_body );
+		if ( $p2mixi_debug ) error_log( "p2mixi_TinyHttpClient.get:  socket recv end " );
+		if ( $response_headers["Status-Code"] == 403 && $p2mixi_debug ) error_log( "p2mixi_http_get:  Body: $response_body " );
+
+		// Redirection support
+		if ( isset( $response_headers["Status-Code"] ) ) {
+			$code = $response_headers["Status-Code"];
+			switch( $code ) {
+			case ( (300 <= $code && $code <= 303) || $code == 307 ):
+				if ( isset( $response_headers["Location"] ) ) {
+					$location = $response_headers["Location"];
+					if ( $p2mixi_debug ) error_log( "p2mixi_http_get: Redirecting($retries retries so far): $location" );
+					p2mixi_http_get( $location, $request_headers, $response_headers, $response_body, $retries + 1 );
+				}
+			break;
+			}
+		}
+	}
+}
+
+function p2mixi_http_post ( $url, $request_headers, $request_body, &$response_headers, &$response_body ) {
+	global $p2mixi_debug;
+	$url_comps = parse_url( $url );
+	if ( $url_comps['port'] == false ) $url_comps['port'] = 80;
+	$sock = new p2mixi_TinyHttpSocket( $url_comps['host'], $url_comps['port'] );
+	$sock->setDebugMode( $p2mixi_debug );
+	if ( !$sock->connect() ) {
+		error_log( "p2mixi_http_post: fsockopen failed: $errstr ( $errno )" );
+	} else {
+		$request_headers["Host"] = $url_comps['host'];
+		$request_headers['Content-Length'] = strlen( $request_body );
+		$sock->send( "POST", $url, $request_headers, $request_body );
+		$sock->recv( $response_headers, $response_body );
+		if ( $p2mixi_debug ) error_log( "p2mixi_http_post:  socket recv end " );
+	}
+}
 
 // ----------------------------------------------------------------------------
 /**
@@ -532,7 +583,7 @@ class p2mixi_TinyHttpSocket {
 			$this->connection = strtolower( $headers["Connection"] );
 		}
 		if ( $this->fp ) {
-			if ( $this->debug ) error_log( "p2mixi_TinyHttpSocket.send():  $out " );
+			if ( $this->debug ) error_log( "p2mixi_TinyHttpSocket.send:  $out " );
 			fwrite( $this->fp, $out );
 		}
 	}
@@ -549,7 +600,7 @@ class p2mixi_TinyHttpSocket {
 		preg_match( '|^HTTP.+ (.+) |', $header, $matches );
 		$headers["Status-Line"] = trim( $header );
 		$headers["Status-Code"] = intval( $matches[1] );
-		if ( $this->debug ) error_log( "p2mixi_TinyHttpSocket.recv(): Status line: ".$header );
+		if ( $this->debug ) error_log( "p2mixi_TinyHttpSocket.recv: Status line: ".$header );
 
 		if ( $header == "" ) return;
 
@@ -563,7 +614,7 @@ class p2mixi_TinyHttpSocket {
 			$name = trim( $param[0] );
 			$value = trim( $param[1] );
 			$headers[$name] = $value;
-			if ( $this->debug ) error_log( "p2mixi_TinyHttpSocket.recv(): $name = $value" );
+			if ( $this->debug ) error_log( "p2mixi_TinyHttpSocket.recv: $name = $value" );
 
 			switch( $name ) {
 				case 'Content-Length':
@@ -584,7 +635,7 @@ class p2mixi_TinyHttpSocket {
 		$body = '';
 
 		if ( $connection == 'close' ) {
-			if ( $this->debug ) error_log( "p2mixi_TinyHttpSocket.recv(): looping for closed connection" );
+			if ( $this->debug ) error_log( "p2mixi_TinyHttpSocket.recv: looping for closed connection" );
 			while ( !feof( $this->fp ) ) {
 				$body .= fread( $this->fp, $this->getlen );
 			}
@@ -592,7 +643,7 @@ class p2mixi_TinyHttpSocket {
 		}
 
 		if ( isset( $length ) and strpos( $transfer, 'chunked' ) === false) {
-			if ( $this->debug ) error_log( "p2mixi_TinyHttpSocket.recv(): looping unchunked keep-alive connection for $length" );
+			if ( $this->debug ) error_log( "p2mixi_TinyHttpSocket.recv: looping unchunked keep-alive connection for $length" );
 			while ( true ) {
 				if ( $length <= 0 ) { break; }
 				$read = fread( $this->fp, $length );
@@ -606,7 +657,7 @@ class p2mixi_TinyHttpSocket {
 		$length = fgets( $this->fp, $this->getlen );
 		$length = hexdec( $length );
 
-		if ( $this->debug ) error_log( "p2mixi_TinyHttpSocket.recv(): looping chunked keep-alive connection for $length" );
+		if ( $this->debug ) error_log( "p2mixi_TinyHttpSocket.recv: looping chunked keep-alive connection for $length" );
 		while ( true ) {
 			if ( $length == 0 ) { break; }
 			$body .= fread( $this->fp, $length );
@@ -620,230 +671,3 @@ class p2mixi_TinyHttpSocket {
 	}
 }
 
-
-/**
- * Http client class
- */
-class p2mixi_TinyHttpClient {
-	var $cookies = array();
-	var $debug = false;
-
-	// Default request headers.
-	var $requestHeaders = array();
-	var $mimeBoundary = "---------------------------111111111111111111111111111";
-
-	var $responseHeaders = null;
-	
-	/**
-	 * constructor
-	 */
-	function p2mixi_TinyHttpClient ( ) {
-		# Init default http request headers.
-		$this->requestHeaders["Accept"] = '*/*';
-		$this->requestHeaders["Connection"] = "Close";
-	}
-
-	
-	function setDebugMode ( $debug )
-	{
-		$this->debug = $debug;
-	}
-	
-	function addRequestHeader ( $name, $value ) {
-		$this->requestHeaders[$name] = $value;
-	}
-	
-	function getResponseHeaders () {
-		return $this->responseHeaders;
-	}
-	
-	/**
-	 * Run GET http request.
-	 */
-	function get ( $url = "", $retries = 0 ) {
-		$res = null;
-		if ( $retries > 10 ) {
-			error_log( "p2mixi_TinyHttpClient.get(): too many retries for $url" );
-			return $res;
-		}
-		if ( $url == "" ) {
-			error_log( 'p2mixi_TinyHttpClient.get(): $url is empty.' );
-		} else {
-			// Parse the URL to get the host name and port number.
-			$this->_parseUrl( $url, $host, $port, $trail);
-			if ( !$port ) $port = 80;
-			if ( $this->debug ) error_log ( "p2mixi_TinyHttpClient.get(): Host >>>$host<<< Port >>>$port<<<" );
-
-			$sock = new p2mixi_TinyHttpSocket( $host, $port );
-			$sock->setDebugMode( $this->debug );
-			if ( !$sock->connect() ) {
-				error_log( "p2mixi_TinyHttpClient.get(): fsockopen failed: $errstr ( $errno )" );
-			} else {
-				$headers = $this->requestHeaders;
-				$headers["Host"] = $host;
-				if ( count( $this->cookies ) > 0 ) {
-					$headers['Cookie'] = $this->_constructCookieString();
-				}
-
-				$sock->send( "GET", $url, $headers );
-				$sock->recv( $resp_headers, $resp_body );
-				if ( $this->debug ) error_log( "p2mixi_TinyHttpClient.get():  socket recv end " );
-				if ( $resp_headers["Status-Code"] == 403 && $this->debug ) error_log( "p2mixi_TinyHttpClient.get():  Body: $resp_body " );
-
-				$this->_setResponseHeaders( $resp_headers );
-				$res = $resp_body;
-				$sock->close();
-
-				if ( isset( $this->responseHeaders["Status-Code"] ) ) {
-					$code = $this->responseHeaders["Status-Code"];
-					switch( $code ) {
-					case ( (300 <= $code && $code <= 303) || $code == 307 ):
-						if ( isset( $this->responseHeaders["Location"] ) ) {
-							$location = $this->responseHeaders["Location"];
-							if ( $this->debug ) error_log( "p2mixi_TinyHttpClient.get(): Redirecting($retries retries so far): $location" );
-							return $this->get( $location, $retries + 1 );
-						}
-					break;
-					}
-				}
-			}
-		}
-		return $res;
-	}
-
-	/**
-	 * Run POST http request.
-	 */
-	function post ( $url = "", $body = "" ) {
-		$res = "";
-		if ( $url == "" ) {
-			error_log( 'p2mixi_TinyHttpClient.post(): $url is empty.' );
-		} elseif ( $body == null ) {
-			error_log( 'p2mixi_TinyHttpClient.post(): $body is empty.' );
-		} else {
-			$this->_parseUrl( $url, $host, $port, $trail);
-			if ( !$port ) $port = 80;
-			$sock = new p2mixi_TinyHttpSocket( $host, $port );
-			$sock->setDebugMode( $this->debug );
-			if ( !$sock->connect() ) {
-				error_log( "p2mixi_TinyHttpClient.post(): fsockopen failed: $errstr ( $errno )" );
-			} else {
-				$headers = $this->requestHeaders;
-				$headers['Content-Length'] = strlen( $body );
-				$headers['Host'] = $host;
-
-				if ( count( $this->cookies ) > 0 ) {
-					$headers['Cookie'] = $this->_constructCookieString();
-				}
-				 
-				$sock->send( "POST", $url, $headers, $body );
-				$sock->recv( $resp_headers, $resp_body );
-				if ( $this->debug ) error_log( "p2mixi_TinyHttpClient.post():  socket recv end " );
-				$sock->close();
-				$this->_setResponseHeaders( $resp_headers );
-				$res = $resp_body;
-			}
-		}
-		return $res;
-	}
-		
-	/**
-	 * Parse url and return host, port, trailing path
-	 */
-	function _parseUrl ( $url, &$host, &$port, &$trail ) {
-		$comps = parse_url( $url );
-		$path = $comps['path'];
-		if ( $path == "" ) $path = '/';
-		if ( isset( $comps['query'] ) ) {
-			$path .= '?' . $comps['query'];
-		}
-		if ( isset( $comps['fragment'] ) ) {
-			$path .= '#' . $comps['fragment'];
-		}
-		$host = $comps['host'];
-		$port = ( !isset( $comps['port'] ) || $comps['port'] == false ) ? 80 : $comps['port'];
-		$trail = $path;
-		return $comps;
-	}
-	/**
-	 * Parse http response header
-	 */
-	function _setResponseHeaders ( $headers ) {
-		$this->responseHeaders = $headers;
-		if( isset( $headers['Set-Cookie'] ) ) {
-			if ( $this->debug ) error_log( "p2mixi_TinyHttpClient._parseResponseHeaders(): cookie found :  $line " );
-			$this->_parseCookie($headers['Set-Cookie']);
-		}
-	}
-	
-	/**
-	 * Parse the cookies from the http response
-	 */
-	function _parseCookie ( $line ) {
-		// Sample set-cookie line is like following.
-		// name=value; path=/; expires=Wednesday, 09-Nov-99 23:12:40 GMT
-		
-		// Get the "name=value" part
-		$cookie = explode( ";", $line );
-		// Split name and value.
-		$cookie = explode ( "=", $cookie[1] );
-		if ( count( $cookie ) == 2 )
-		{
-			if ( $this->debug ) error_log( "p2mixi_TinyHttpClient._parseCookie(): $cookie[0] = $cookie[1]" );
-			$this->cookies[trim( $cookie[0] )] = trim( $cookie[1] );
-		}
-	}
-
-	function _constructCookieString () {
-		$str = "";
-		foreach ( $this->cookies as $name=>$value ) {
-			$str .= "$name=$value;";
-		}
-		return $str;
-	}
-
-	function _constructPostData ( $params ) {
-		$str = "";
-		foreach ( $params as $name=>$value ) {
-			$str .= "$name=$value&";
-		}
-		// Take off the last '&'
-		$str = substr( $str, 0, strlen( $str ) - 1 );
-		return $str;
-	}
-
-	function _constructMimeData ( $params ) {
-		$str = "";
-		foreach ( $params as $name=>$value ) {
-
-			if ( is_string( $value ) ) {
-				$str .= '--';
-				$str .= $this->mimeBoundary;
-				$str .= "\r\n";
-				$str .= "Content-Disposition: form-data; name=\"$name\"\r\n\r\n";
-				$str .= "$value\r\n";
-			} elseif ( is_array( $value ) ) {
-				$str .= '--' . $this->mimeBoundary;
-				$str .= "\r\n";
-				$str .= 'Content-Disposition: form-data; name="'.$value['name'].'"; ' ;
-				$str .= 'filename="';
-				$str .= $value['filename'];
-				$str .= "\"\r\n";
-				//        $str .= "Content-Transfer-Encoding: base64\r\n";
-				$str .= 'Content-type:';
-				$str .= $value['content-type'];
-				$str .= "\r\n\r\n";
-				//        $str .= chunk_split( base64_encode( $value['data'] ) ) ;
-				$str .= $value['data'];
-				$str .= "\r\n";
-			}
-
-		}
-		$str .= '--' . $this->mimeBoundary . "--";
-		return $str;
-	}
-}
-
-
-
-?>
