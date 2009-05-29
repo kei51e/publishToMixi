@@ -3,7 +3,6 @@ require_once( 'phpunit.php' );
 
 class HtmlWriter
 {
-
 	function onStartTestMain ($runner)
 	{
 		echo "    <table align=center border=0 cellpadding=0 cellspacing=0 ";
@@ -13,8 +12,10 @@ class HtmlWriter
 	function onEndTestMain ($runner)
 	{
 		echo "    </table>\n";
-		echo "    <p>Successfully executed <b>$this->TESTS_COMPLETED</b> of ";
-		echo "<b>$this->TESTS_TOTAL</b> tests</p>\n";
+		//echo "    <p>Successfully executed <b>$this->TESTS_COMPLETED</b> of ";
+		echo "    <p>Successfully executed <b>$runner->TESTS_COMPLETED</b> of ";
+//		echo "<b>$this->TESTS_TOTAL</b> tests</p>\n";
+		echo "<b>$runner->TESTS_TOTAL</b> tests</p>\n";
 	}
 
 	function onStartRunTest ($class)
@@ -34,7 +35,8 @@ class HtmlWriter
 
 	function onStartTestMethod ($class, $method)
 	{
-		$css         = $this->TESTS_TOTAL % 2 == 0 ? 'dark' : 'light';
+//		$css         = $this->TESTS_TOTAL % 2 == 0 ? 'dark' : 'light';
+		$css = 'light';
 		echo "      <tr>\n";
 		echo "        <td class=$css width=50 nowrap valign=top>";
 		echo substr($method, 4), "</td>\n";
