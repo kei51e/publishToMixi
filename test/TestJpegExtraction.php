@@ -14,7 +14,7 @@ class TestJpegExtraction extends Test {
 		Assert::equals( strlen ($images['images'][0]), 5221, '');
 	}
 	function testExtractJpegImagesWithRedirection () {
-		$html = '<html><body><img src="http://ocafe.appspot.com/?redirect"/></body></html>';
+		$html = '<html><body><img src="http://ocafe.appspot.com/?redirect=true"/></body></html>';
 		$images = p2mixi_extract_jpeg_images ( $html, 1 );
 //		Assert::equals( count ($images['images']), 1, '');
 		Assert::equals( strlen ($images['images'][0]), 5221, '');
