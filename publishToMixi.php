@@ -466,7 +466,7 @@ function p2mixi_extract_jpeg_images ( $html, $max = 1 ) {
 function p2mixi_http_get ( $url, $request_headers, &$response_headers, &$response_body, $retries = 0 ) {
 	global $p2mixi_debug;
 	$url_comps = parse_url( $url );
-	if ( $url_comps['port'] == false ) $url_comps['port'] = 80;
+	if ( ! isset( $url_comps['port'] ) ) $url_comps['port'] = 80;
 	$sock = new p2mixi_TinyHttpSocket( $url_comps['host'], $url_comps['port'] );
 	$sock->setDebugMode( $p2mixi_debug );
 	if ( !$sock->connect() ) {
@@ -497,7 +497,7 @@ function p2mixi_http_get ( $url, $request_headers, &$response_headers, &$respons
 function p2mixi_http_post ( $url, $request_headers, $request_body, &$response_headers, &$response_body ) {
 	global $p2mixi_debug;
 	$url_comps = parse_url( $url );
-	if ( $url_comps['port'] == false ) $url_comps['port'] = 80;
+	if ( ! isset( $url_comps['port'] ) ) $url_comps['port'] = 80;
 	$sock = new p2mixi_TinyHttpSocket( $url_comps['host'], $url_comps['port'] );
 	$sock->setDebugMode( $p2mixi_debug );
 	if ( !$sock->connect() ) {
