@@ -324,7 +324,12 @@ function p2mixi_publish_to_mixi () {
 if ( function_exists( 'add_action' ) ) {
 	add_action( 'admin_init', 'p2mixi_admin_init' );
 	add_action( 'admin_menu', 'p2mixi_render_option' );
-	add_action( 'publish_post', 'p2mixi_publish_handler' );
+//	add_action( 'publish_post', 'p2mixi_publish_handler' );
+	add_action( 'draft_to_publish', 'p2mixi_publish_handler' );
+	add_action( 'private_to_publish', 'p2mixi_publish_handler' );
+	add_action( 'pending_to_publish', 'p2mixi_publish_handler' );
+	add_action( 'future_to_publish', 'p2mixi_publish_handler' );
+	add_action( 'new_to_publish', 'p2mixi_publish_handler' );
 }
 
 if ( function_exists( 'register_activation_hook' ) ) {
