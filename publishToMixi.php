@@ -66,52 +66,53 @@ function p2mixi_activate () {
  */
 function p2mixi_render_option () {
 	// expects 'add_meta_box' function... wordpress 2.5 and and above.
-	add_meta_box( 'myplugin_sectionid', __( 'Publish To Mixi', 'p2mixi_textdomain' ), 
+	add_meta_box( 'myplugin_sectionid', __( 'mixi投稿設定', 'p2mixi_textdomain' ), 
 		'p2mixi_render_option_content', 'post', 'advanced' );
 //	add_options_page( __( 'mixi autopost settings', 'p2mixi_textdomain'), __( 'Mixi Autoposting', 'p2mixi_textdomain' ), 8, __FILE__, 'p2mixi_render_admin_option_content');
-	add_options_page( __( 'Publish To Mixi', 'p2mixi_textdomain'), __( 'Publish To Mixi', 'p2mixi_textdomain' ), 8, __FILE__, 'p2mixi_render_admin_option_content');
+	add_options_page( __( 'mixi投稿設定', 'p2mixi_textdomain'), __( 'mixi投稿設定', 'p2mixi_textdomain' ), 8, __FILE__, 'p2mixi_render_admin_option_content');
 }
 
 function p2mixi_render_admin_option_content () {
 	?>
 	<div class="wrap">
-	<h2><?php echo __('Publish To Mixi', 'p2mixi_textdomain') ?></h2>
+	<h2><?php echo __('mixi投稿設定', 'p2mixi_textdomain') ?></h2>
 	<form method="post" action="options.php">
 	<?php settings_fields('p2mixi'); ?>
-        <h3><?php echo __('Login info', 'p2mixi_textdomain') ?></h3>
+        <h3><?php echo __('ログイン情報', 'p2mixi_textdomain') ?></h3>
 	<p></p>
 	<table class="form-table">
 	<tr valign="top">
-	   <th scope="row"><?php echo __('Username:', 'p2mixi_textdomain') ?></th>
+	   <th scope="row"><?php echo __('mixi 登録メールアドレス', 'p2mixi_textdomain') ?></th>
 		<td><input type="text" name="p2mixi_username" value="<?php echo get_option('p2mixi_username'); ?>" /><td>
         </tr>
 	<tr valign="top">
-	   <th scope="row"><?php echo __('Password:', 'p2mixi_textdomain') ?></th>
+	   <th scope="row"><?php echo __('mixi パスワード', 'p2mixi_textdomain') ?></th>
 		<td><input type="password" name="p2mixi_password" value="<?php echo get_option('p2mixi_password'); ?>" /><td>
         </tr>
 	<tr valign="top">
-	   <th scope="row"><?php echo __('ID:', 'p2mixi_textdomain') ?></th>
+	   <th scope="row"><?php echo __('mixi ID', 'p2mixi_textdomain') ?></th>
 		<td><input type="text" name="p2mixi_id" value="<?php echo get_option('p2mixi_id'); ?>" /><td>
         </tr>
 	</table>
-        <h3><?php echo __('Posting defaults', 'p2mixi_textdomain') ?></h3>
+        <h3><?php echo __('デフォルトの投稿設定', 'p2mixi_textdomain') ?></h3>
 	<p></p>
 	<table class="form-table">
 	<tr valign="top">
-	   <th scope="row"><?php echo __('Header:', 'p2mixi_textdomain') ?></th>
+	   <th scope="row"><?php echo __('ヘッダー', 'p2mixi_textdomain') ?></th>
 		<td><textarea name="p2mixi_header_default" cols="60" rows="4"><?php echo get_option('p2mixi_header_default'); ?></textarea><br/>
-		<?php echo __('%%URL%% will be replaced with the post permalink.', '') ?><td>
+		<?php echo __('%%URL%% と書くと記事へのパーマリンクで置換されます', 'p2mixi_textdomain') ?><td>
         </tr>
 	<tr valign="top">
-	   <th scope="row"><?php echo __('Footer:', 'p2mixi_textdomain') ?></th>
+	   <th scope="row"><?php echo __('フッター', 'p2mixi_textdomain') ?></th>
 		<td><textarea name="p2mixi_footer_default" cols="60" rows="4"><?php echo get_option('p2mixi_footer_default'); ?></textarea><br/>
-		<?php echo __('%%URL%% will be replaced with the post permalink.', '') ?><td>
+		<?php echo __('%%URL%% と書くと記事へのパーマリンクで置換されます', 'p2mixi_textdomain') ?><td>
         </tr>
 	<tr valign="top">
-	   <th scope="row"><?php echo __('Default:', 'p2mixi_textdomain') ?></th>
+	   <th scope="row"></th>
 		<td><label for="p2mixi_default">
 		<input type="checkbox" name="p2mixi_default" id="p2mixi_default" <?php if ( get_option('p2mixi_default') == true ) { echo 'checked="checked"'; } ?> />
-		<?php echo __( 'Publish to mixi by default', 'p2mixi_textdomain' ) ?>
+		<?php echo __( '「mixiに投稿する」チェックボックスをデフォルトでオンにする', 'p2mixi_textdomain' ) ?></label><br/>
+		<?php echo __( ' (WordPress iPhoneアプリやリモート投稿経由でmixiに投稿したい場合もここを有効にします)', 'p2mixi_textdomain' ) ?>
 		<td>
         </tr>
 	</table>
@@ -136,17 +137,17 @@ function p2mixi_render_option_content () {
 	<input type="hidden" name="p2mixi_noncename" id="p2mixi_noncename" value="<?php echo wp_create_nonce( plugin_basename(__FILE__) ) ?>" />
 	<div>
 		<input type="checkbox" name="p2mixi_publishcheckbox" id="p2mixi_publishcheckbox" <?php if ( $p2mixi_default == true ) { echo 'checked="checked"'; } ?> />
-		<label for="p2mixi_publishbox"> <?php echo __("Publish To Mixi", 'p2mixi_textdomain' ) ?> </label>
+		<label for="p2mixi_publishbox"> <?php echo __("mixiに投稿する", 'p2mixi_textdomain' ) ?> </label>
 	</div>
 
 	<div style="margin-top:6px">
-		<label for="p2mixi_headertext"> <?php echo __("Header Text", 'p2mixi_textdomain' ) ?> </label>
+		<label for="p2mixi_headertext"> <?php echo __("ヘッダー:", 'p2mixi_textdomain' ) ?> </label>
 	</div>
 	<div>
 		<textarea style="width:98%" name="p2mixi_headertext" id="p2mixi_headertext"><?php  echo $p2mixi_header_default; ?></textarea>
 	</div>
 	<div style="margin-top:6px">
-		<label for="p2mixi_footertext"> <?php echo __("Footer Text", 'p2mixi_textdomain' ) ?> </label>
+		<label for="p2mixi_footertext"> <?php echo __("フッター:", 'p2mixi_textdomain' ) ?> </label>
 	</div>
 	<div>
 		<textarea style="width:98%" name="p2mixi_footertext" id="p2mixi_footertext"><?php  echo $p2mixi_footer_default; ?></textarea>
