@@ -486,6 +486,10 @@ function p2mixi_http_get ( $url, $request_headers, &$response_headers, &$respons
 				if ( isset( $response_headers["Location"] ) ) {
 					$location = $response_headers["Location"];
 					if ( $p2mixi_debug ) error_log( "p2mixi_http_get: Redirecting($retries retries so far): $location" );
+//					if ( isset( $response_headers['cookies'] ) ) {
+//						if ( $p2mixi_debug ) error_log( "p2mixi_http_get: Setting cookies :". p2mixi_constrcut_cookies_string( $response_headers['cookies'] ) );
+//						$request_headers['Cookie'] = p2mixi_construct_cookies_string( $response_headers['cookies'] );
+//					}
 					p2mixi_http_get( $location, $request_headers, $response_headers, $response_body, $retries + 1 );
 				}
 			break;
@@ -509,6 +513,16 @@ function p2mixi_http_post ( $url, $request_headers, $request_body, &$response_he
 		$sock->recv( $response_headers, $response_body );
 		if ( $p2mixi_debug ) error_log( "p2mixi_http_post:  socket recv end " );
 	}
+}
+
+
+
+function p2mixi_construct_cookies_string ( $cookies ) {
+	$str = "";
+	foreach ( $cookies as $name=>$value ) {
+		$str .= "$name=$value;";
+	}
+	return $str;
 }
 
 // ----------------------------------------------------------------------------
@@ -563,7 +577,7 @@ class p2mixi_TinyHttpSocket {
 		fclose( $this->fp );
 	}
 
-	function _constructHeaderString ( $headers ) {
+	function constructHeaderString ( $headers ) {
 		$str = "";
 		foreach ( $headers as $name=>$value ) {
 			$str .= "$name: $value\r\n";
@@ -571,9 +585,25 @@ class p2mixi_TinyHttpSocket {
 		return $str;
 	}
 
+
+//	function parseCookie ( $line ) {
+//		// $line should look like following
+//		// name=value; path=/; expires=Wednesday, 09-Nov-99 23:12:40 GMT
+//		// Get the "Set-Cookie: name=value" part
+//		$cookie = explode( ";", $line );
+//		// Split name and value.
+//		$cookie = explode ( "=", $cookie[0] );
+//		if ( count( $cookie ) == 2 ) {
+//			return array ( 'name' => trim( $cookie[0] ), 'value' => trim( $cookie[1] ) );
+//		}
+//		else {
+//			return array ();
+//		}
+//	}
+	
 	function send ( $method, $url, $headers, $body='' ) {
 		$out = "$method $url HTTP/1.1\r\n";
-		$out .= $this->_constructHeaderString( $headers );
+		$out .= $this->constructHeaderString( $headers );
 		$out .= "\r\n";
 		if ( $body != '' ) {
 			$out .= $body;
@@ -607,6 +637,7 @@ class p2mixi_TinyHttpSocket {
 		$mime = '';
 		$transfer = '';
 		$connection = $this->connection;
+//		$cookies = array();
 		
 		while ( $line = fgets( $this->fp, $this->getlen ) ) {
 			if ( $line == "\r\n" ) { break; }
@@ -628,9 +659,18 @@ class p2mixi_TinyHttpSocket {
 					break;
 				case 'Transfer-Encoding':
 					$transfer = strtolower( $value );
-				break;
+					break;
+//				case 'Set-Cookie':
+//					$cookie = $this->parseCookie( $value );
+//					if ( count( $cookie ) > 0 ) {
+//						$cookies[$cookie['name']] = $cookie['value'];
+//					}
+//					break;
 			}
-		 }
+		}
+//		if ( count( $cookies ) > 0 ) {
+//			$headers['cookies'] = $cookies; 
+//		}
 
 		$body = '';
 
