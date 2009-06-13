@@ -2,9 +2,9 @@
 /*
  Plugin Name: publishToMixi
  Plugin URI: http://ksnn.com/diary/?page_id=2437
- Description: Publish the post to Mixi using AtomPub
+ Description: WordPressへの投稿をmixiにも同時に投稿するためのプラグインです。
  Author: Kei Saito
- Version: 2.1
+ Version: 3.0
  Author URI: http://ksnn.com/
  Contributors: ento
  */
@@ -216,9 +216,10 @@ function p2mixi_publish_handler ( $postId ) {
 
 	// Body
 	$body = $post->post_content;
+	$movies = p2mixi_parse_movie_links( $body );
 	$body = p2mixi_replace_hyperlinks( $body, array( $images['urls'][0] ) );
 	$body = p2mixi_sanitize_html( $body );
-
+	$body .= $movies;
 	// Footer	
 	if ( $footer != '' ) {
 		$footer = str_replace( '%%URL%%', $post->guid, $footer );
@@ -424,6 +425,30 @@ function p2mixi_sanitize_html ( $text ) {
 	$ret = strip_tags( $ret );
 	// &nbsp; -> &amp;nbsp; etc.
 	$ret = htmlspecialchars( $ret, ENT_QUOTES, "utf-8" );
+	return $ret;
+}
+
+function p2mixi_parse_movie_links ( $text ) {
+	$ret = '';
+	//$ids = preg_grep( "/http:\/\/www\.youtube\.com\/watch\?v\=([0-9A-Za-z]*)/", array( $text ) );
+	
+	$ids = array();
+	preg_match_all( "/href=\"http:\/\/www\.youtube\.com\/watch\?v=([0-9A-Za-z_]*)/", $text, $ids, PREG_PATTERN_ORDER );
+	foreach( $ids[1] as $id ) {
+		$ret .= '&lt;externalvideo src="YT:' . $id . '"&gt;';
+	}
+	
+	$ids = array();
+	preg_match_all( "/src=\"http:\/\/www\.youtube\.com\/v\/([0-9A-Za-z_]*)/", $text, $ids, PREG_PATTERN_ORDER );
+	foreach( $ids[1] as $id ) {
+		$ret .= '&lt;externalvideo src="YT:' . $id . '"&gt;';
+	}
+	
+	$ids = array();
+	preg_match_all( "/href=\"http:\/\/www\.nicovideo\.jp\/watch\/(sm[0-9]*)/", $text, $ids, PREG_PATTERN_ORDER );
+	foreach( $ids[1] as $id ) {
+		$ret .= '&lt;externalvideo src="NC:' . $id . '"&gt;';
+	}
 	return $ret;
 }
 
