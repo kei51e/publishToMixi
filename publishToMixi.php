@@ -29,7 +29,7 @@
  */
 
 // Debug mode - for debug purpose only
-$p2mixi_debug = true;
+$p2mixi_debug = false;
 
 // ----------------------------------------------------------------------------
 /**
