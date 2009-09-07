@@ -29,7 +29,7 @@
  */
 
 // Debug mode - for debug purpose only
-$p2mixi_debug = false;
+$p2mixi_debug = true;
 
 // ----------------------------------------------------------------------------
 /**
@@ -202,7 +202,7 @@ function p2mixi_publish_handler ( $postId ) {
 	
 	// Get the post detail from wordpress.
 	$post = get_post( $postId );
-	if ( $post->post_status != 'publish' ) {
+	if ( $post->post_status != 'publish' || $post->post_type != 'post' ) {
 		return $postId;
 	}
 	// Extracting images from the post content.
