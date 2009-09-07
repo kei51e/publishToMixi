@@ -157,6 +157,20 @@ function p2mixi_render_option_content () {
 }
 
 /**
+ * Tells the post is coming from the wordpress admin page or not.
+ * @param $post $_POST
+ * @return boolean 
+ */
+function p2mixi_is_submitted_from_wp_admin ( $post ) {
+	foreach ($post as $key => $value) {
+		if ( $key == 'p2mixi_footertext' ) {
+			return true;
+		}
+  	}
+  	return false;
+}
+
+/**
  * Publishes the wordpress entry to mixi.
  *
  * @param number $postId
@@ -173,31 +187,29 @@ function p2mixi_publish_handler ( $postId ) {
 		
 	$header = "";
 	$footer = "";	
-		
-	// In case the entry was posted from the tool, not from the wp-admin page
-	// by checking any of text input field was there or not.
-	if ( $_POST['p2mixi_footertext'] == null ) {
-		if ( $p2mixi_default == false ) {
-			return $postId;
-		}
-		
-		$header = $p2mixi_header_default;
-		$footer = $p2mixi_footer_default;
-				
-	} else {
 
+	// If the post was published from the wordpress admin page.
+	if ( p2mixi_is_submitted_from_wp_admin( $_POST ) == true ) {
 		// verify this came from the our screen and with proper authorization,
 		// because publish_post can be triggered at other times
 		if ( !wp_verify_nonce( $_POST['p2mixi_noncename'], plugin_basename(__FILE__) )) {
 			return $post_id;
-		}
-		
-		// In case the entry was posted from the wp-admin page.
+		}		
 		if ( $_POST['p2mixi_publishcheckbox'] == null || $_POST['p2mixi_publishcheckbox'] == 'false'  ) {
 			return $postId;
 		}
 		$header = trim( $_POST['p2mixi_headertext'] );
 		$footer = trim( $_POST['p2mixi_footertext'] );
+				
+	} else {
+		// If the post was published not from the wordpress admin page 
+		// such as iphone application, user doesn't see the publishToMixi option. 
+		// If that's the case, publishToMixi just follows the default configuration.
+		if ( $p2mixi_default == false ) {
+			return $postId;
+		}
+		$header = $p2mixi_header_default;
+		$footer = $p2mixi_footer_default;
 	}
 	
 	// Get the post detail from wordpress.
@@ -210,7 +222,7 @@ function p2mixi_publish_handler ( $postId ) {
 	
 	// Header
 	if ( $header != '' ) {
-		$header = str_replace( '%%URL%%', $post->guid, $header );
+		$header = str_replace( '%%URL%%', get_permalink( $postId ), $header );
 		$header = p2mixi_sanitize_html ( $header . "\r\n\r\n" );		
 	}
 
@@ -222,7 +234,7 @@ function p2mixi_publish_handler ( $postId ) {
 	$body .= $movies;
 	// Footer	
 	if ( $footer != '' ) {
-		$footer = str_replace( '%%URL%%', $post->guid, $footer );
+		$footer = str_replace( '%%URL%%', get_permalink( $postId ), $footer );
 		$footer = p2mixi_sanitize_html( "\r\n\r\n" . $footer );
 	}
 	
