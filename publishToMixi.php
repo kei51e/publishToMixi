@@ -4,14 +4,14 @@
  Plugin URI: http://ksnn.com/diary/?page_id=2437
  Description: WordPressへの投稿をmixiにも同時に投稿するためのプラグインです。
  Author: Kei Saito
- Version: 3.0
+ Version: 3.0.2
  Author URI: http://ksnn.com/
  Contributors: ento
  */
 
 /*
  * A wordpress plugin to publish the post to Mixi
- * Copyright (C) 2008,2009 Kei Saito (http://ksnn.com/)
+ * Copyright (C) 2008,2009,2010 Kei Saito (http://ksnn.com/)
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -68,58 +68,79 @@ function p2mixi_render_option () {
 	// expects 'add_meta_box' function... wordpress 2.5 and and above.
 	add_meta_box( 'myplugin_sectionid', __( 'mixi投稿設定', 'p2mixi_textdomain' ), 
 		'p2mixi_render_option_content', 'post', 'advanced' );
-//	add_options_page( __( 'mixi autopost settings', 'p2mixi_textdomain'), __( 'Mixi Autoposting', 'p2mixi_textdomain' ), 8, __FILE__, 'p2mixi_render_admin_option_content');
-	add_options_page( __( 'mixi投稿設定', 'p2mixi_textdomain'), __( 'mixi投稿設定', 'p2mixi_textdomain' ), 8, __FILE__, 'p2mixi_render_admin_option_content');
+//	add_options_page( __( 'mixi autopost settings', 'p2mixi_textdomain' ), __( 'Mixi Autoposting', 'p2mixi_textdomain' ), 8, __FILE__, 'p2mixi_render_admin_option_content' );
+	add_options_page( __( 'mixi投稿設定', 'p2mixi_textdomain' ), __( 'mixi投稿設定', 'p2mixi_textdomain' ), 8, __FILE__, 'p2mixi_render_admin_option_content' );
 }
 
 function p2mixi_render_admin_option_content () {
+	
+	// HTTP connection testing. 
+	// If this doesn't work, maybe the main functionality won't work
+	// because maybe the PHP configuration on this server doesn't allow you
+	// to open the connection to the different servers. 
+  $request_headers['Accept'] = '*/*';
+  $request_headers["Connection"] = "Keep-Alive";
+  $response_headers = array();
+  $response_body = '';
+  $connectable = p2mixi_http_get( 'http://mixi.jp/', $request_headers, $response_headers, $response_body );
+	
 	?>
 	<div class="wrap">
-	<h2><?php echo __('mixi投稿設定', 'p2mixi_textdomain') ?></h2>
-	<form method="post" action="options.php">
-	<?php settings_fields('p2mixi'); ?>
-        <h3><?php echo __('ログイン情報', 'p2mixi_textdomain') ?></h3>
-	<p></p>
-	<table class="form-table">
-	<tr valign="top">
-	   <th scope="row"><?php echo __('mixi 登録メールアドレス', 'p2mixi_textdomain') ?></th>
-		<td><input type="text" name="p2mixi_username" value="<?php echo get_option('p2mixi_username'); ?>" /><td>
-        </tr>
-	<tr valign="top">
-	   <th scope="row"><?php echo __('mixi パスワード', 'p2mixi_textdomain') ?></th>
-		<td><input type="password" name="p2mixi_password" value="<?php echo get_option('p2mixi_password'); ?>" /><td>
-        </tr>
-	<tr valign="top">
-	   <th scope="row"><?php echo __('mixi ID', 'p2mixi_textdomain') ?></th>
-		<td><input type="text" name="p2mixi_id" value="<?php echo get_option('p2mixi_id'); ?>" /><td>
-        </tr>
-	</table>
-        <h3><?php echo __('デフォルトの投稿設定', 'p2mixi_textdomain') ?></h3>
-	<p></p>
-	<table class="form-table">
-	<tr valign="top">
-	   <th scope="row"><?php echo __('ヘッダー', 'p2mixi_textdomain') ?></th>
-		<td><textarea name="p2mixi_header_default" cols="60" rows="4"><?php echo get_option('p2mixi_header_default'); ?></textarea><br/>
-		<?php echo __('%%URL%% と書くと記事へのパーマリンクで置換されます', 'p2mixi_textdomain') ?><td>
-        </tr>
-	<tr valign="top">
-	   <th scope="row"><?php echo __('フッター', 'p2mixi_textdomain') ?></th>
-		<td><textarea name="p2mixi_footer_default" cols="60" rows="4"><?php echo get_option('p2mixi_footer_default'); ?></textarea><br/>
-		<?php echo __('%%URL%% と書くと記事へのパーマリンクで置換されます', 'p2mixi_textdomain') ?><td>
-        </tr>
-	<tr valign="top">
-	   <th scope="row"></th>
-		<td><label for="p2mixi_default">
-		<input type="checkbox" name="p2mixi_default" id="p2mixi_default" <?php if ( get_option('p2mixi_default') == true ) { echo 'checked="checked"'; } ?> />
-		<?php echo __( '「mixiに投稿する」チェックボックスをデフォルトでオンにする', 'p2mixi_textdomain' ) ?></label><br/>
-		<?php echo __( ' (WordPress iPhoneアプリやリモート投稿経由でmixiに投稿したい場合もここを有効にします)', 'p2mixi_textdomain' ) ?>
-		<td>
-        </tr>
-	</table>
-	<p class="submit">
-	<input type="submit" class="button-primary" value="<?php _e('Save Changes') ?>" />
-	</p>
-	</form>
+		<h2><?php echo __( 'mixi投稿設定', 'p2mixi_textdomain' ) ?></h2>
+
+		<div style="border:1px dotted #999999;padding:2px">
+		<?php 
+			if ( $connectable == true ) 
+				echo __( 'mixiへの接続テストが成功しました。publishToMixiは動作しています。', 'p2mixi_textdomain' );
+			else 
+				echo __( 'mixiへの接続テストが失敗しました。publishToMixiは動作しない可能性があります。', 'p2mixi_textdomain' );
+		?> 
+		</div>
+		
+		<form method="post" action="options.php">
+			<?php settings_fields( 'p2mixi' ); ?>
+			<h3><?php echo __( 'ログイン情報', 'p2mixi_textdomain' ) ?></h3>
+			<p></p>
+			<table class="form-table">
+				<tr valign="top">
+					<th scope="row"><?php echo __( 'mixi 登録メールアドレス', 'p2mixi_textdomain' ) ?></th>
+					<td><input type="text" name="p2mixi_username" value="<?php echo get_option( 'p2mixi_username' ); ?>" /></td>
+				</tr>
+				<tr valign="top">
+					<th scope="row"><?php echo __( 'mixi パスワード', 'p2mixi_textdomain' ) ?></th>
+					<td><input type="password" name="p2mixi_password" value="<?php echo get_option( 'p2mixi_password' ); ?>" /></td>
+				</tr>
+				<tr valign="top">
+				 <th scope="row"><?php echo __( 'mixi ID', 'p2mixi_textdomain' ) ?></th>
+					<td><input type="text" name="p2mixi_id" value="<?php echo get_option( 'p2mixi_id' ); ?>" /></td>
+				</tr>
+			</table>
+			<h3><?php echo __( 'デフォルトの投稿設定', 'p2mixi_textdomain' ) ?></h3>
+			<p></p>
+			<table class="form-table">
+				<tr valign="top">
+					<th scope="row"><?php echo __( 'ヘッダー', 'p2mixi_textdomain' ) ?></th>
+					<td><textarea name="p2mixi_header_default" cols="60" rows="4"><?php echo get_option( 'p2mixi_header_default' ); ?></textarea><br/>
+					<?php echo __( '%%URL%% と書くと記事へのパーマリンクで置換されます', 'p2mixi_textdomain' ) ?></td>
+				</tr>
+				<tr valign="top">
+					<th scope="row"><?php echo __( 'フッター', 'p2mixi_textdomain' ) ?></th>
+					<td><textarea name="p2mixi_footer_default" cols="60" rows="4"><?php echo get_option( 'p2mixi_footer_default' ); ?></textarea><br/>
+					<?php echo __( '%%URL%% と書くと記事へのパーマリンクで置換されます', 'p2mixi_textdomain' ) ?></td>
+				</tr>
+				<tr valign="top">
+					<th scope="row"></th>
+					<td><label for="p2mixi_default">
+					<input type="checkbox" name="p2mixi_default" id="p2mixi_default" <?php if ( get_option( 'p2mixi_default' ) == true ) { echo 'checked="checked"'; } ?> />
+					<?php echo __( '「mixiに投稿する」チェックボックスをデフォルトでオンにする', 'p2mixi_textdomain' ) ?></label><br/>
+					<?php echo __( ' (WordPress iPhoneアプリやリモート投稿経由でmixiに投稿したい場合もここを有効にします)', 'p2mixi_textdomain' ) ?>
+					</td>
+				</tr>
+			</table>
+			<p class="submit">
+				<input type="submit" class="button-primary" value="<?php _e( 'Save Changes' ) ?>" />
+			</p>
+		</form>
 	</div>
 	<?php
 }
@@ -144,13 +165,13 @@ function p2mixi_render_option_content () {
 		<label for="p2mixi_headertext"> <?php echo __("ヘッダー:", 'p2mixi_textdomain' ) ?> </label>
 	</div>
 	<div>
-		<textarea style="width:98%" name="p2mixi_headertext" id="p2mixi_headertext"><?php  echo $p2mixi_header_default; ?></textarea>
+		<textarea style="width:98%" name="p2mixi_headertext" id="p2mixi_headertext"><?php echo $p2mixi_header_default; ?></textarea>
 	</div>
 	<div style="margin-top:6px">
 		<label for="p2mixi_footertext"> <?php echo __("フッター:", 'p2mixi_textdomain' ) ?> </label>
 	</div>
 	<div>
-		<textarea style="width:98%" name="p2mixi_footertext" id="p2mixi_footertext"><?php  echo $p2mixi_footer_default; ?></textarea>
+		<textarea style="width:98%" name="p2mixi_footertext" id="p2mixi_footertext"><?php echo $p2mixi_footer_default; ?></textarea>
 	</div>
 	
 	<?php 
@@ -166,8 +187,8 @@ function p2mixi_is_submitted_from_wp_admin ( $post ) {
 		if ( $key == 'p2mixi_footertext' ) {
 			return true;
 		}
-  	}
-  	return false;
+	}
+	return false;
 }
 
 /**
@@ -195,7 +216,7 @@ function p2mixi_publish_handler ( $postId ) {
 		if ( !wp_verify_nonce( $_POST['p2mixi_noncename'], plugin_basename(__FILE__) )) {
 			return $post_id;
 		}		
-		if ( $_POST['p2mixi_publishcheckbox'] == null || $_POST['p2mixi_publishcheckbox'] == 'false'  ) {
+		if ( $_POST['p2mixi_publishcheckbox'] == null || $_POST['p2mixi_publishcheckbox'] == 'false' ) {
 			return $postId;
 		}
 		$header = trim( $_POST['p2mixi_headertext'] );
@@ -277,14 +298,14 @@ function p2mixi_publish_to_mixi () {
 	// WSSE Authentication
 	$nonce = ""; 
 	if ( function_exists( 'posix_getpid' ) ) {
-		$nonce = pack('H*', sha1(md5(time().rand().posix_getpid())));
+		$nonce = pack( 'H*', sha1(md5(time().rand().posix_getpid())));
 	} else {
 		// Use uniqid() in case of windows.
-		$nonce = pack('H*', sha1(md5(time().rand().uniqid())));
+		$nonce = pack( 'H*', sha1(md5(time().rand().uniqid())));
 	}
 	
-	$created     = date('Y-m-d\TH:i:s\Z');
-	$digest      = base64_encode(pack('H*', sha1($nonce . $created . $password)));
+	$created     = date( 'Y-m-d\TH:i:s\Z' );
+	$digest      = base64_encode(pack( 'H*', sha1($nonce . $created . $password)));
 	$wsse_text   = 'UsernameToken Username="%s", PasswordDigest="%s", Nonce="%s", Created="%s"';
 	$wsse_header = sprintf($wsse_text, $username, $digest, base64_encode($nonce), $created);
 	
@@ -514,6 +535,7 @@ function p2mixi_http_get ( $url, $request_headers, &$response_headers, &$respons
 	$sock->setDebugMode( $p2mixi_debug );
 	if ( !$sock->connect() ) {
 		error_log( "p2mixi_http_get: fsockopen failed: $errstr ( $errno )" );
+		return false;
 	} else {
 		$request_headers["Host"] = $url_comps['host'];
 		$sock->send( "GET", $url, $request_headers );
@@ -538,6 +560,7 @@ function p2mixi_http_get ( $url, $request_headers, &$response_headers, &$respons
 			break;
 			}
 		}
+		return true;
 	}
 }
 
@@ -549,12 +572,14 @@ function p2mixi_http_post ( $url, $request_headers, $request_body, &$response_he
 	$sock->setDebugMode( $p2mixi_debug );
 	if ( !$sock->connect() ) {
 		error_log( "p2mixi_http_post: fsockopen failed: $errstr ( $errno )" );
+		return false;
 	} else {
 		$request_headers["Host"] = $url_comps['host'];
 		$request_headers['Content-Length'] = strlen( $request_body );
 		$sock->send( "POST", $url, $request_headers, $request_body );
 		$sock->recv( $response_headers, $response_body );
 		if ( $p2mixi_debug ) error_log( "p2mixi_http_post:  socket recv end " );
+		return true;
 	}
 }
 
