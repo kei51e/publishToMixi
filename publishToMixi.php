@@ -4,7 +4,7 @@
  Plugin URI: http://ksnn.com/diary/?page_id=2437
  Description: WordPressへの投稿をmixiにも同時に投稿するためのプラグインです。
  Author: Kei Saito
- Version: 3.0.2
+ Version: 3.0.2.1
  Author URI: http://ksnn.com/
  Contributors: ento
  */
@@ -91,9 +91,9 @@ function p2mixi_render_admin_option_content () {
 		<div style="border:1px dotted #999999;padding:2px">
 		<?php 
 			if ( $connectable == true ) 
-				echo __( 'mixiへの接続テストが成功しました。publishToMixiは動作しています。', 'p2mixi_textdomain' );
+				echo __( 'publishToMixiは動作しています。', 'p2mixi_textdomain' );
 			else 
-				echo __( 'mixiへの接続テストが失敗しました。publishToMixiは動作しない可能性があります。', 'p2mixi_textdomain' );
+				echo __( 'WordPressからmixiへのネットワークの接続に問題がありました。publishToMixiは動作しない可能性があります。', 'p2mixi_textdomain' );
 		?> 
 		</div>
 		
